@@ -1,723 +1,740 @@
-// src/App.jsx
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import {
-  auth, loginGoogle, logout, checkRedirectResult,
-  loadUserData, saveVersion, saveProgress,
-  addBookmark, removeBookmark, addHistory,
-} from './firebase';
-import Kids from './Kids';
+import { useState } from 'react';
 
-// Base path para JSONs (funciona em dev e no GitHub Pages)
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const LIGHT = {
+  bg:'#f8fafc', bg2:'#fff', bg3:'#f1f5f9',
+  text:'#1e293b', text2:'#64748b', text3:'#94a3b8',
+  border:'#e2e8f0', accent:'#1e40af', accentLight:'#bfdbfe',
+  accentBg:'#eff6ff', headerBg:'#fff', cardBg:'#fff',
+};
+const DARK = {
+  bg:'#0f172a', bg2:'#1e293b', bg3:'#1e293b',
+  text:'#f1f5f9', text2:'#94a3b8', text3:'#64748b',
+  border:'#334155', accent:'#60a5fa', accentLight:'#1e40af',
+  accentBg:'#172554', headerBg:'#1e293b', cardBg:'#1e293b',
+};
 
-// ── Lista canônica dos 66 livros ───────────────────────────────────────────
-const BOOKS = [
-  { id: 'gn',  name: 'Gênesis',          abbrev: 'Gn',  testament: 'AT' },
-  { id: 'ex',  name: 'Êxodo',            abbrev: 'Êx',  testament: 'AT' },
-  { id: 'lv',  name: 'Levítico',         abbrev: 'Lv',  testament: 'AT' },
-  { id: 'nm',  name: 'Números',          abbrev: 'Nm',  testament: 'AT' },
-  { id: 'dt',  name: 'Deuteronômio',     abbrev: 'Dt',  testament: 'AT' },
-  { id: 'js',  name: 'Josué',            abbrev: 'Js',  testament: 'AT' },
-  { id: 'jz',  name: 'Juízes',           abbrev: 'Jz',  testament: 'AT' },
-  { id: 'rt',  name: 'Rute',             abbrev: 'Rt',  testament: 'AT' },
-  { id: '1sm', name: '1 Samuel',         abbrev: '1Sm', testament: 'AT' },
-  { id: '2sm', name: '2 Samuel',         abbrev: '2Sm', testament: 'AT' },
-  { id: '1rs', name: '1 Reis',           abbrev: '1Rs', testament: 'AT' },
-  { id: '2rs', name: '2 Reis',           abbrev: '2Rs', testament: 'AT' },
-  { id: '1cr', name: '1 Crônicas',       abbrev: '1Cr', testament: 'AT' },
-  { id: '2cr', name: '2 Crônicas',       abbrev: '2Cr', testament: 'AT' },
-  { id: 'ed',  name: 'Esdras',           abbrev: 'Ed',  testament: 'AT' },
-  { id: 'ne',  name: 'Neemias',          abbrev: 'Ne',  testament: 'AT' },
-  { id: 'et',  name: 'Ester',            abbrev: 'Et',  testament: 'AT' },
-  { id: 'jo',  name: 'Jó',              abbrev: 'Jó',  testament: 'AT' },
-  { id: 'sl',  name: 'Salmos',           abbrev: 'Sl',  testament: 'AT' },
-  { id: 'pv',  name: 'Provérbios',       abbrev: 'Pv',  testament: 'AT' },
-  { id: 'ec',  name: 'Eclesiastes',      abbrev: 'Ec',  testament: 'AT' },
-  { id: 'ct',  name: 'Cantares',         abbrev: 'Ct',  testament: 'AT' },
-  { id: 'is',  name: 'Isaías',           abbrev: 'Is',  testament: 'AT' },
-  { id: 'jr',  name: 'Jeremias',         abbrev: 'Jr',  testament: 'AT' },
-  { id: 'lm',  name: 'Lamentações',      abbrev: 'Lm',  testament: 'AT' },
-  { id: 'ez',  name: 'Ezequiel',         abbrev: 'Ez',  testament: 'AT' },
-  { id: 'dn',  name: 'Daniel',           abbrev: 'Dn',  testament: 'AT' },
-  { id: 'os',  name: 'Oséias',           abbrev: 'Os',  testament: 'AT' },
-  { id: 'jl',  name: 'Joel',             abbrev: 'Jl',  testament: 'AT' },
-  { id: 'am',  name: 'Amós',             abbrev: 'Am',  testament: 'AT' },
-  { id: 'ob',  name: 'Obadias',          abbrev: 'Ob',  testament: 'AT' },
-  { id: 'jn',  name: 'Jonas',            abbrev: 'Jn',  testament: 'AT' },
-  { id: 'mq',  name: 'Miquéias',         abbrev: 'Mq',  testament: 'AT' },
-  { id: 'na',  name: 'Naum',             abbrev: 'Na',  testament: 'AT' },
-  { id: 'hc',  name: 'Habacuque',        abbrev: 'Hc',  testament: 'AT' },
-  { id: 'sf',  name: 'Sofonias',         abbrev: 'Sf',  testament: 'AT' },
-  { id: 'ag',  name: 'Ageu',             abbrev: 'Ag',  testament: 'AT' },
-  { id: 'zc',  name: 'Zacarias',         abbrev: 'Zc',  testament: 'AT' },
-  { id: 'ml',  name: 'Malaquias',        abbrev: 'Ml',  testament: 'AT' },
-  { id: 'mt',  name: 'Mateus',           abbrev: 'Mt',  testament: 'NT' },
-  { id: 'mc',  name: 'Marcos',           abbrev: 'Mc',  testament: 'NT' },
-  { id: 'lc',  name: 'Lucas',            abbrev: 'Lc',  testament: 'NT' },
-  { id: 'jo2', name: 'João',             abbrev: 'Jo',  testament: 'NT' },
-  { id: 'at',  name: 'Atos',             abbrev: 'At',  testament: 'NT' },
-  { id: 'rm',  name: 'Romanos',          abbrev: 'Rm',  testament: 'NT' },
-  { id: '1co', name: '1 Coríntios',      abbrev: '1Co', testament: 'NT' },
-  { id: '2co', name: '2 Coríntios',      abbrev: '2Co', testament: 'NT' },
-  { id: 'gl',  name: 'Gálatas',          abbrev: 'Gl',  testament: 'NT' },
-  { id: 'ef',  name: 'Efésios',          abbrev: 'Ef',  testament: 'NT' },
-  { id: 'fp',  name: 'Filipenses',       abbrev: 'Fp',  testament: 'NT' },
-  { id: 'cl',  name: 'Colossenses',      abbrev: 'Cl',  testament: 'NT' },
-  { id: '1ts', name: '1 Tessalonicenses',abbrev: '1Ts', testament: 'NT' },
-  { id: '2ts', name: '2 Tessalonicenses',abbrev: '2Ts', testament: 'NT' },
-  { id: '1tm', name: '1 Timóteo',        abbrev: '1Tm', testament: 'NT' },
-  { id: '2tm', name: '2 Timóteo',        abbrev: '2Tm', testament: 'NT' },
-  { id: 'tt',  name: 'Tito',             abbrev: 'Tt',  testament: 'NT' },
-  { id: 'fm',  name: 'Filemom',          abbrev: 'Fm',  testament: 'NT' },
-  { id: 'hb',  name: 'Hebreus',          abbrev: 'Hb',  testament: 'NT' },
-  { id: 'tg',  name: 'Tiago',            abbrev: 'Tg',  testament: 'NT' },
-  { id: '1pe', name: '1 Pedro',          abbrev: '1Pe', testament: 'NT' },
-  { id: '2pe', name: '2 Pedro',          abbrev: '2Pe', testament: 'NT' },
-  { id: '1jo', name: '1 João',           abbrev: '1Jo', testament: 'NT' },
-  { id: '2jo', name: '2 João',           abbrev: '2Jo', testament: 'NT' },
-  { id: '3jo', name: '3 João',           abbrev: '3Jo', testament: 'NT' },
-  { id: 'jd',  name: 'Judas',            abbrev: 'Jd',  testament: 'NT' },
-  { id: 'ap',  name: 'Apocalipse',       abbrev: 'Ap',  testament: 'NT' },
+// ── Ilustrações SVG ────────────────────────────────────────────────────────
+const Ilustracoes = {
+  criacao: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <defs><radialGradient id="sky" cx="50%" cy="40%"><stop offset="0%" stopColor="#7dd3fc"/><stop offset="100%" stopColor="#1e40af"/></radialGradient></defs>
+      <rect width="300" height="180" fill="url(#sky)"/>
+      <ellipse cx="150" cy="160" rx="160" ry="50" fill="#16a34a"/>
+      <circle cx="60" cy="50" r="28" fill="#fde68a" opacity="0.9"/>
+      <circle cx="200" cy="40" r="18" fill="#fff" opacity="0.8"/>
+      <circle cx="230" cy="50" r="22" fill="#fff" opacity="0.7"/>
+      <circle cx="210" cy="35" r="15" fill="#fff" opacity="0.9"/>
+      <ellipse cx="80" cy="130" rx="25" ry="18" fill="#15803d"/>
+      <ellipse cx="100" cy="120" rx="20" ry="15" fill="#16a34a"/>
+      <rect x="90" y="130" width="8" height="20" fill="#92400e"/>
+      <ellipse cx="200" cy="125" rx="22" ry="16" fill="#15803d"/>
+      <ellipse cx="215" cy="115" rx="18" ry="14" fill="#16a34a"/>
+      <rect x="207" y="128" width="7" height="18" fill="#92400e"/>
+      <path d="M130 155 Q150 140 170 155" stroke="#60a5fa" strokeWidth="3" fill="none"/>
+    </svg>
+  ),
+  adaoeva: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#d1fae5"/>
+      <ellipse cx="150" cy="170" rx="160" ry="40" fill="#15803d"/>
+      <circle cx="100" cy="70" r="22" fill="#fbbf24"/>
+      <rect x="92" y="90" width="16" height="40" rx="8" fill="#fbbf24"/>
+      <circle cx="200" cy="70" r="22" fill="#f9a8d4"/>
+      <rect x="192" y="90" width="16" height="40" rx="8" fill="#f9a8d4"/>
+      <ellipse cx="150" cy="80" rx="18" ry="30" fill="#15803d"/>
+      <ellipse cx="150" cy="60" rx="14" ry="22" fill="#16a34a"/>
+      <circle cx="150" cy="42" r="10" fill="#dc2626"/>
+      <text x="143" y="46" fontSize="12" fill="#fff">🍎</text>
+      <path d="M118 80 Q150 95 182 80" stroke="#92400e" strokeWidth="2" fill="none"/>
+    </svg>
+  ),
+  noe: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#7dd3fc"/>
+      <ellipse cx="150" cy="200" rx="200" ry="80" fill="#1d4ed8"/>
+      <path d="M60 120 L80 100 L220 100 L240 120 Z" fill="#92400e"/>
+      <rect x="80" y="80" width="140" height="25" fill="#b45309"/>
+      <rect x="110" y="55" width="80" height="30" fill="#d97706"/>
+      <path d="M150 40 L130 55 L170 55 Z" fill="#b45309"/>
+      <text x="80" y="117" fontSize="16">🦁🐘🦒🐦</text>
+      <path d="M10 140 Q50 125 90 140 Q130 155 170 140 Q210 125 250 140 Q280 150 300 140" stroke="#fff" strokeWidth="3" fill="none" opacity="0.6"/>
+      <circle cx="240" cy="40" r="15" fill="#fde68a"/>
+      <path d="M220 30 Q240 10 260 30" stroke="#f97316" strokeWidth="3" fill="none"/>
+    </svg>
+  ),
+  babel: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#fef3c7"/>
+      <ellipse cx="150" cy="175" rx="160" ry="30" fill="#d97706"/>
+      <rect x="110" y="150" width="80" height="25" fill="#b45309"/>
+      <rect x="115" y="125" width="70" height="28" fill="#d97706"/>
+      <rect x="122" y="100" width="56" height="28" fill="#b45309"/>
+      <rect x="130" y="75" width="40" height="28" fill="#d97706"/>
+      <rect x="138" y="50" width="24" height="28" fill="#b45309"/>
+      <rect x="144" y="30" width="12" height="22" fill="#d97706"/>
+      <circle cx="250" cy="35" r="20" fill="#fbbf24"/>
+      <text x="60" y="100" fontSize="14" opacity="0.6">?</text>
+      <text x="220" y="120" fontSize="14" opacity="0.6">!</text>
+      <text x="80" y="140" fontSize="12" opacity="0.5">...</text>
+    </svg>
+  ),
+  jose: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#fef3c7"/>
+      <ellipse cx="150" cy="175" rx="160" ry="30" fill="#d4a373"/>
+      <circle cx="150" cy="65" r="28" fill="#fbbf24"/>
+      <rect x="122" y="90" width="56" height="60" rx="4" fill="#7c3aed"/>
+      <rect x="118" y="92" width="8" height="55" fill="#ec4899"/>
+      <rect x="174" y="92" width="8" height="55" fill="#3b82f6"/>
+      <rect x="130" y="90" width="40" height="8" fill="#fbbf24"/>
+      <line x1="122" y1="92" x2="178" y2="92" stroke="#f59e0b" strokeWidth="2"/>
+      <path d="M126 150 L122 175 M174 150 L178 175" stroke="#6b7280" strokeWidth="3"/>
+      <text x="60" y="80" fontSize="20">⭐</text>
+      <text x="210" y="80" fontSize="20">⭐</text>
+      <text x="135" y="170" fontSize="14">🌾🌾</text>
+    </svg>
+  ),
+  moises: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#dbeafe"/>
+      <rect x="0" y="100" width="300" height="80" fill="#1d4ed8"/>
+      <path d="M0 100 Q75 70 150 100 Q225 130 300 100 L300 80 Q225 110 150 80 Q75 50 0 80 Z" fill="#3b82f6"/>
+      <circle cx="50" cy="50" r="22" fill="#fbbf24"/>
+      <rect x="38" y="70" width="24" height="40" rx="4" fill="#d97706"/>
+      <line x1="50" y1="70" x2="50" y2="110" stroke="#92400e" strokeWidth="3"/>
+      <path d="M30 110 L50 90 L70 110" fill="none" stroke="#92400e" strokeWidth="2"/>
+      <path d="M150 95 L155 75 L165 70 L170 80 L160 85 Z" fill="#fbbf24" opacity="0.8"/>
+      <text x="200" y="90" fontSize="24">🌊</text>
+      <text x="130" y="170" fontSize="14">🐟🐟🐟</text>
+    </svg>
+  ),
+  davi: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#fef3c7"/>
+      <ellipse cx="150" cy="175" rx="160" ry="30" fill="#86efac"/>
+      <circle cx="80" cy="60" r="22" fill="#fbbf24"/>
+      <rect x="68" y="80" width="24" height="50" rx="4" fill="#3b82f6"/>
+      <line x1="80" y1="80" x2="80" y2="130" stroke="#1d4ed8" strokeWidth="2"/>
+      <ellipse cx="220" cy="90" rx="30" ry="45" fill="#6b7280"/>
+      <circle cx="220" cy="45" r="20" fill="#9ca3af"/>
+      <rect x="205" y="60" width="30" height="8" fill="#6b7280"/>
+      <path d="M75 70 Q110 55 145 65" stroke="#92400e" strokeWidth="3" fill="none" strokeDasharray="4"/>
+      <circle cx="148" cy="66" r="5" fill="#92400e"/>
+      <text x="65" y="155" fontSize="14">🐑🐑</text>
+      <text x="55" y="55" fontSize="12">⭐</text>
+    </svg>
+  ),
+  jonas: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#0c4a6e"/>
+      <ellipse cx="150" cy="120" rx="130" ry="60" fill="#1d4ed8"/>
+      <path d="M20 120 Q75 100 130 120 Q185 140 240 120 Q270 110 300 120 L300 180 L0 180 Z" fill="#1e3a8a"/>
+      <ellipse cx="200" cy="115" rx="70" ry="35" fill="#16a34a"/>
+      <ellipse cx="150" cy="110" rx="50" ry="25" fill="#15803d"/>
+      <circle cx="240" cy="95" r="8" fill="#fff" opacity="0.8"/>
+      <text x="170" y="118" fontSize="20">👁</text>
+      <circle cx="50" cy="60" r="18" fill="#fbbf24"/>
+      <rect x="38" y="76" width="24" height="30" rx="4" fill="#d97706"/>
+      <path d="M40 80 Q50 95 60 80" stroke="#b45309" strokeWidth="2" fill="none"/>
+      <text x="10" y="50" fontSize="16">⛈</text>
+      <text x="255" y="50" fontSize="16">🌊</text>
+    </svg>
+  ),
+  daniel: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#1c1917"/>
+      <rect x="0" y="120" width="300" height="60" fill="#292524"/>
+      <rect x="0" y="0" width="40" height="180" fill="#44403c"/>
+      <rect x="260" y="0" width="40" height="180" fill="#44403c"/>
+      <circle cx="150" cy="75" r="22" fill="#fbbf24"/>
+      <rect x="138" y="95" width="24" height="40" rx="4" fill="#7c3aed"/>
+      <ellipse cx="80" cy="140" rx="25" ry="18" fill="#b45309"/>
+      <circle cx="80" cy="125" r="12" fill="#d97706"/>
+      <ellipse cx="60" cy="135" rx="8" ry="6" fill="#d97706"/>
+      <ellipse cx="100" cy="135" rx="8" ry="6" fill="#d97706"/>
+      <ellipse cx="220" cy="140" rx="25" ry="18" fill="#b45309"/>
+      <circle cx="220" cy="125" r="12" fill="#d97706"/>
+      <ellipse cx="200" cy="135" rx="8" ry="6" fill="#d97706"/>
+      <ellipse cx="240" cy="135" rx="8" ry="6" fill="#d97706"/>
+      <text x="135" y="50" fontSize="20">✨</text>
+      <circle cx="150" cy="20" r="8" fill="#fbbf24" opacity="0.8"/>
+    </svg>
+  ),
+  jesus: (
+    <svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',borderRadius:12}}>
+      <rect width="300" height="180" fill="#1e1b4b"/>
+      <ellipse cx="150" cy="175" rx="160" ry="30" fill="#92400e"/>
+      <rect x="110" y="110" width="80" height="50" rx="4" fill="#b45309"/>
+      <rect x="100" y="125" width="100" height="10" fill="#92400e"/>
+      <circle cx="150" cy="100" r="15" fill="#fde68a"/>
+      <ellipse cx="150" cy="95" rx="10" ry="8" fill="#fbbf24" opacity="0.6"/>
+      <circle cx="60" cy="60" r="10" fill="#fde68a"/>
+      <circle cx="80" cy="40" r="8" fill="#fde68a" opacity="0.8"/>
+      <circle cx="240" cy="55" r="12" fill="#fde68a"/>
+      <circle cx="220" cy="35" r="8" fill="#fde68a" opacity="0.7"/>
+      <circle cx="150" cy="25" r="15" fill="#fbbf24"/>
+      <path d="M150 10 L155 20 L150 18 L145 20 Z" fill="#fbbf24"/>
+      <text x="30" y="100" fontSize="14">🐑</text>
+      <text x="240" y="110" fontSize="14">🐄</text>
+      <text x="130" y="175" fontSize="12">🌟</text>
+    </svg>
+  ),
+};
+
+// ── Histórias ──────────────────────────────────────────────────────────────
+const HISTORIAS = [
+  {
+    id: 'criacao',
+    titulo: 'A Criação do Mundo',
+    emoji: '🌍',
+    cor: '#0ea5e9',
+    corClara: '#e0f2fe',
+    texto: `No começo, não existia nada — nem luz, nem terra, nem animais. Só havia escuridão. Então Deus começou a criar!
+
+No primeiro dia, Deus disse: "Haja luz!" E a luz apareceu, separando o dia da noite.
+
+No segundo dia, Deus criou o céu, separando as águas de cima das águas de baixo.
+
+No terceiro dia, Deus juntou as águas num só lugar e fez aparecer a terra seca. Depois cobriu a terra de plantas, flores, árvores e frutos deliciosos!
+
+No quarto dia, Deus criou o sol para iluminar o dia, a lua para a noite, e encheu o céu de estrelas brilhantes.
+
+No quinto dia, os oceanos ganharam peixes de todas as cores, e o céu ficou cheio de pássaros cantantes.
+
+No sexto dia, Deus criou os animais terrestres — leões, elefantes, borboletas, formigas... e também criou o ser humano, feito à Sua imagem!
+
+No sétimo dia, Deus descansou e abençoou esse dia, tornando-o especial.
+
+Tudo o que Deus criou era muito bom! 🌟`,
+    referencia: 'Gênesis 1-2',
+    quiz: [
+      { pergunta: 'O que Deus criou no primeiro dia?', opcoes: ['Os animais', 'A luz', 'O sol', 'Os peixes'], correta: 1 },
+      { pergunta: 'Em qual dia Deus criou o ser humano?', opcoes: ['Terceiro', 'Quarto', 'Quinto', 'Sexto'], correta: 3 },
+      { pergunta: 'O que Deus fez no sétimo dia?', opcoes: ['Criou os animais', 'Criou as estrelas', 'Descansou', 'Criou a terra'], correta: 2 },
+    ],
+    vof: [
+      { afirmacao: 'Deus criou a luz no primeiro dia.', resposta: true },
+      { afirmacao: 'Os pássaros foram criados no terceiro dia.', resposta: false },
+      { afirmacao: 'Deus achou que tudo que criou era muito bom.', resposta: true },
+      { afirmacao: 'Deus trabalhou no sétimo dia também.', resposta: false },
+    ],
+  },
+  {
+    id: 'adaoeva',
+    titulo: 'Adão e Eva',
+    emoji: '🍎',
+    cor: '#16a34a',
+    corClara: '#dcfce7',
+    texto: `Depois de criar o mundo, Deus formou o primeiro homem do pó da terra e soprou vida em suas narinas. Seu nome era Adão!
+
+Deus plantou um jardim maravilhoso chamado Éden, cheio de árvores lindas e frutos deliciosos. Ele colocou Adão lá para cuidar do jardim.
+
+Deus disse a Adão: "Você pode comer de qualquer árvore do jardim, exceto da árvore do conhecimento do bem e do mal. Se comer dela, vai morrer."
+
+Depois, Deus criou Eva para ser a companheira de Adão, pois não era bom o homem ficar sozinho.
+
+Mas uma serpente astuta enganou Eva, dizendo que a fruta proibida era deliciosa e faria ela ficar sábia como Deus. Eva comeu e deu para Adão também.
+
+Quando Deus foi ao jardim, viu que eles tinham desobedecido. Com o coração cheio de tristeza, Deus precisou tirá-los do Jardim do Éden.
+
+Mas mesmo assim, Deus nunca deixou de amar Adão e Eva! Deus já tinha um plano para salvar a humanidade. 💕`,
+    referencia: 'Gênesis 2-3',
+    quiz: [
+      { pergunta: 'Como se chamava o jardim onde Adão e Eva viviam?', opcoes: ['Nazaré', 'Éden', 'Belém', 'Canaã'], correta: 1 },
+      { pergunta: 'O que estava proibido no jardim?', opcoes: ['Nadar', 'Correr', 'Comer da árvore do conhecimento', 'Falar com animais'], correta: 2 },
+      { pergunta: 'Quem enganou Eva?', opcoes: ['Um leão', 'Adão', 'Uma serpente', 'Um anjo'], correta: 2 },
+    ],
+    vof: [
+      { afirmacao: 'Adão foi criado do pó da terra.', resposta: true },
+      { afirmacao: 'Eva foi criada antes de Adão.', resposta: false },
+      { afirmacao: 'Deus permitiu que comessem de todas as árvores.', resposta: false },
+      { afirmacao: 'Deus continuou amando Adão e Eva mesmo depois da desobediência.', resposta: true },
+    ],
+  },
+  {
+    id: 'noe',
+    titulo: 'Noé e o Dilúvio',
+    emoji: '🌈',
+    cor: '#7c3aed',
+    corClara: '#ede9fe',
+    texto: `Muitos anos depois de Adão e Eva, as pessoas no mundo tinham se afastado muito de Deus. Havia muita maldade por toda parte.
+
+Mas havia um homem diferente: Noé. Ele era justo e caminhava com Deus. Deus escolheu Noé para uma missão especial!
+
+Deus disse a Noé: "Vou enviar um grande dilúvio. Construa uma arca enorme de madeira para você, sua família e um casal de cada animal."
+
+Noé obedeceu! Mesmo com todo mundo rindo dele, ele trabalhou por anos construindo a arca gigante. Quando ficou pronta, entrou com sua família e com os animais — elefantes, girafas, leões, pombas, formigas e muitos outros!
+
+Então a chuva começou. Choveu por 40 dias e 40 noites! A água cobriu toda a terra. Mas Noé e todos dentro da arca estavam seguros.
+
+Quando a chuva parou, Noé soltou uma pomba que voltou com um ramo de oliveira — sinal de que a terra estava seca!
+
+Ao sair da arca, Noé agradeceu a Deus. Então algo lindo apareceu no céu: um ARCO-ÍRIS! Deus prometeu que nunca mais destruiria a terra com um dilúvio. 🌈`,
+    referencia: 'Gênesis 6-9',
+    quiz: [
+      { pergunta: 'Por quantos dias e noites choveu?', opcoes: ['7', '20', '40', '100'], correta: 2 },
+      { pergunta: 'Que animal Noé soltou para ver se a terra estava seca?', opcoes: ['Corvo e pomba', 'Águia', 'Pomba', 'Pardal'], correta: 2 },
+      { pergunta: 'O que Deus colocou no céu como sinal da promessa?', opcoes: ['Uma estrela', 'Um arco-íris', 'Uma nuvem', 'O sol'], correta: 1 },
+    ],
+    vof: [
+      { afirmacao: 'Noé era um homem mau.', resposta: false },
+      { afirmacao: 'Noé levou um casal de cada animal para a arca.', resposta: true },
+      { afirmacao: 'A pomba voltou com um ramo de oliveira.', resposta: true },
+      { afirmacao: 'Deus prometeu nunca mais destruir a terra com fogo.', resposta: false },
+    ],
+  },
+  {
+    id: 'babel',
+    titulo: 'A Torre de Babel',
+    emoji: '🏗️',
+    cor: '#d97706',
+    corClara: '#fef3c7',
+    texto: `Depois do dilúvio, as pessoas se espalharam pela terra. Naquela época, todo mundo falava a mesma língua e se entendia perfeitamente.
+
+Um dia, as pessoas chegaram numa planície chamada Sinear e tiveram uma ideia. Elas disseram: "Vamos construir uma cidade enorme e uma torre tão alta que chegue até o céu! Assim vamos ficar famosos e ninguém vai nos espalhar pela terra!"
+
+Elas começaram a trabalhar duro, fazendo tijolos e construindo cada vez mais alto. A torre crescia, crescia e crescia...
+
+Mas Deus viu o que estavam fazendo. O problema não era a torre em si, mas o coração das pessoas: elas queriam se igualar a Deus e dependiam só delas mesmas, sem precisar d'Ele.
+
+Então Deus fez algo surpreendente: confundiu a linguagem das pessoas! De repente, ninguém entendia mais ninguém. Um dizia "tijolo" e o outro ouvia palavras estranhas!
+
+Sem conseguir se comunicar, as pessoas pararam de construir e se espalharam pelos quatro cantos do mundo. A cidade incompleta ficou conhecida como Babel, que significa "confusão".
+
+E foi assim que surgiram as diferentes línguas e culturas do mundo! 🌍`,
+    referencia: 'Gênesis 11:1-9',
+    quiz: [
+      { pergunta: 'Como se chamava a planície onde as pessoas construíram a torre?', opcoes: ['Éden', 'Sinear', 'Canaã', 'Egito'], correta: 1 },
+      { pergunta: 'Por que Deus confundiu as línguas das pessoas?', opcoes: ['Porque a torre era feia', 'Porque elas queriam se igualar a Deus sem depender d\'Ele', 'Porque elas brigavam', 'Porque a torre era muito alta'], correta: 1 },
+      { pergunta: 'O que significa o nome "Babel"?', opcoes: ['Paz', 'Alegria', 'Confusão', 'Torre'], correta: 2 },
+    ],
+    vof: [
+      { afirmacao: 'No começo, todas as pessoas falavam a mesma língua.', resposta: true },
+      { afirmacao: 'As pessoas queriam construir a torre para honrar a Deus.', resposta: false },
+      { afirmacao: 'Deus aprovou a construção da torre.', resposta: false },
+      { afirmacao: 'Depois de Babel, as pessoas se espalharam pelo mundo.', resposta: true },
+    ],
+  },
+  {
+    id: 'jose',
+    titulo: 'José e a Túnica Colorida',
+    emoji: '🌈',
+    cor: '#7c3aed',
+    corClara: '#ede9fe',
+    texto: `Jacó tinha doze filhos, mas José era seu filho favorito. Para mostrar seu amor, Jacó deu a José uma túnica linda e colorida, cheia de cores vibrantes!
+
+Os irmãos de José ficaram com muita inveja. A situação piorou quando José contou seus sonhos: ele sonhou que todos os irmãos se curvavam para ele como feixes de trigo, e que o sol, a lua e onze estrelas se inclinavam diante dele.
+
+Com raiva, os irmãos fizeram uma coisa terrível: jogaram José numa cisterna e depois o venderam para mercadores egípcios por 20 moedas de prata!
+
+Eles mentiram para o pai, mostrando a túnica ensanguentada de um animal, dizendo que José tinha morrido.
+
+No Egito, José foi vendido como escravo. Mesmo sofrendo injustiças, ele confiou em Deus. Deus estava com José em tudo!
+
+Deus deu a José um dom especial: interpretar sonhos. Quando o Faraó teve sonhos perturbadores, chamaram José. Ele explicou que haveria 7 anos de fartura e 7 de fome no Egito.
+
+Impressionado, o Faraó nomeou José como segundo homem mais poderoso do Egito!
+
+Quando a fome chegou, os irmãos de José foram ao Egito pedir comida — e se curvaram diante dele, exatamente como no sonho! José os perdoou com amor e trouxe toda a família para o Egito. Os planos de Deus são sempre maiores! 💛`,
+    referencia: 'Gênesis 37-45',
+    quiz: [
+      { pergunta: 'Por quanto José foi vendido pelos irmãos?', opcoes: ['10 moedas de ouro', '20 moedas de prata', '30 moedas de bronze', '5 moedas de ouro'], correta: 1 },
+      { pergunta: 'Que dom especial Deus deu a José?', opcoes: ['Cantar', 'Interpretar sonhos', 'Curar doenças', 'Correr rápido'], correta: 1 },
+      { pergunta: 'O que aconteceu quando os irmãos foram ao Egito?', opcoes: ['Foram presos', 'Se curvaram diante de José', 'Não reconheceram José', 'Voltaram sem comida'], correta: 1 },
+    ],
+    vof: [
+      { afirmacao: 'José era o filho favorito de Jacó.', resposta: true },
+      { afirmacao: 'Os irmãos de José ficaram felizes com a túnica colorida.', resposta: false },
+      { afirmacao: 'José guardou rancor dos irmãos e se vingou.', resposta: false },
+      { afirmacao: 'Deus estava com José mesmo quando ele sofria.', resposta: true },
+    ],
+  },
+  {
+    id: 'moises',
+    titulo: 'Moisés e o Mar Vermelho',
+    emoji: '🌊',
+    cor: '#0891b2',
+    corClara: '#cffafe',
+    texto: `O povo de Israel estava escravizado no Egito há muitos anos. Eles trabalhavam muito, sofriam e clamavam a Deus por ajuda.
+
+Deus escolheu Moisés para libertá-los! Após muitas pragas no Egito, o Faraó finalmente deixou o povo partir. Mais de 600 mil pessoas saíram do Egito!
+
+Mas logo o Faraó se arrependeu e enviou seu poderoso exército atrás deles. Quando os israelitas chegaram à beira do Mar Vermelho, ficaram aterrorizados: o mar à frente e o exército atrás!
+
+O povo reclamou com Moisés: "Para que nos tiraste do Egito para morrer aqui?"
+
+Moisés disse com fé: "Não tenham medo! Vejam a salvação do Senhor!"
+
+Então Deus fez algo INCRÍVEL: mandou Moisés estender seu cajado sobre o mar. Um vento forte soprou a noite toda, e as águas se abriram! Formou-se um caminho seco no meio do mar, com paredes de água dos dois lados!
+
+Todo o povo atravessou com segurança! Quando o exército egípcio tentou seguir, as águas voltaram e os cobriram.
+
+O povo ficou tão maravilhado que cantou e dançou de alegria, agradecendo a Deus pela libertação! 🎉`,
+    referencia: 'Êxodo 14',
+    quiz: [
+      { pergunta: 'O que o povo de Israel estava fazendo no Egito?', opcoes: ['Reinando', 'Estudando', 'Escravizado trabalhando', 'Descansando'], correta: 2 },
+      { pergunta: 'O que Deus fez com o Mar Vermelho?', opcoes: ['Secou completamente', 'Abriu as águas formando um caminho', 'Fez chover muito', 'Transformou em terra'], correta: 1 },
+      { pergunta: 'O que o povo fez depois de atravessar o mar?', opcoes: ['Voltou para o Egito', 'Cantou e dançou agradecendo a Deus', 'Dormiu', 'Reclamou de novo'], correta: 1 },
+    ],
+    vof: [
+      { afirmacao: 'Moisés foi escolhido por Deus para libertar o povo.', resposta: true },
+      { afirmacao: 'O povo estava confiante quando viu o exército chegando.', resposta: false },
+      { afirmacao: 'As águas se abriram quando Moisés estendeu o cajado.', resposta: true },
+      { afirmacao: 'O exército egípcio também conseguiu atravessar o mar.', resposta: false },
+    ],
+  },
+  {
+    id: 'davi',
+    titulo: 'Davi e Golias',
+    emoji: '🪨',
+    cor: '#dc2626',
+    corClara: '#fee2e2',
+    texto: `O exército de Israel estava em guerra com os filisteus. E os filisteus tinham um guerreiro terrível: Golias!
+
+Golias media quase 3 metros de altura! Era enorme. Ele usava uma armadura pesada e carregava uma lança enorme. Todo dia ele gritava: "Mandem alguém lutar comigo! Se ele me vencer, seremos seus servos. Se eu vencer, vocês serão nossos servos!"
+
+Os soldados israelitas ficavam paralisados de medo. Ninguém queria enfrentar Golias!
+
+Mas um jovem pastor chamado Davi chegou ao campo de batalha para levar comida aos irmãos. Quando ouviu Golias provocando Israel, ficou indignado: "Quem é esse filisteu que desafia os exércitos de Deus?"
+
+Davi se ofereceu para lutar! O rei Saul ficou surpreso: Davi era apenas um garoto! Mas Davi disse: "Eu cuidei de ovelhas e matei leões e ursos que as atacavam. Deus me protegeu lá, e vai me proteger aqui também!"
+
+Davi pegou sua funda e escolheu 5 pedras lisas no riacho. Golias gargalhou quando viu o menininho se aproximando.
+
+Mas Davi gritou: "Você vem com espada, mas eu venho em nome do Senhor!" Ele colocou uma pedra na funda, girou e atirou. A pedra acertou exatamente a testa de Golias — e o gigante caiu!
+
+O maior gigante foi derrubado por um garoto que confiou em Deus! 🗡️`,
+    referencia: '1 Samuel 17',
+    quiz: [
+      { pergunta: 'Quantas pedras Davi pegou para lutar?', opcoes: ['1', '3', '5', '10'], correta: 2 },
+      { pergunta: 'O que Davi usou para derrotar Golias?', opcoes: ['Espada', 'Arco e flecha', 'Funda e pedra', 'Lança'], correta: 2 },
+      { pergunta: 'O que Davi era antes de ser guerreiro?', opcoes: ['Pescador', 'Pastor', 'Carpinteiro', 'Soldado'], correta: 1 },
+    ],
+    vof: [
+      { afirmacao: 'Golias era um guerreiro israelita.', resposta: false },
+      { afirmacao: 'Os soldados de Israel tinham muito medo de Golias.', resposta: true },
+      { afirmacao: 'Davi confiou na força de Deus para vencer.', resposta: true },
+      { afirmacao: 'Golias usava uma armadura muito leve.', resposta: false },
+    ],
+  },
+  {
+    id: 'jonas',
+    titulo: 'Jonas e o Peixe Grande',
+    emoji: '🐋',
+    cor: '#0891b2',
+    corClara: '#cffafe',
+    texto: `Deus chamou o profeta Jonas: "Levanta e vai à grande cidade de Nínive! As pessoas de lá estão fazendo coisas muito erradas."
+
+Mas Jonas não queria ir. Nínive era inimiga de Israel! Jonas fugiu na direção oposta, embarcando num navio rumo a Társis.
+
+No mar, Deus enviou uma tempestade enorme. O navio sacudia tanto que os marinheiros ficaram apavorados! Eles jogavam a carga ao mar para aliviar o peso.
+
+Jonas estava dormindo lá embaixo. Quando o capitão o acordou, fizeram uma sorte para descobrir quem era o culpado. A sorte caiu sobre Jonas!
+
+Jonas confessou: "Eu fugi de Deus. Joguem-me ao mar e a tempestade vai parar."
+
+Os marinheiros, com muita pena, jogaram Jonas ao mar. E imediatamente a tempestade parou!
+
+Então Deus preparou um GRANDE PEIXE que engoliu Jonas. Dentro do peixe, durante 3 dias e 3 noites, Jonas orou e pediu perdão a Deus.
+
+O peixe vomitou Jonas em terra firme!
+
+Desta vez, Jonas obedeceu. Ele foi a Nínive e pregou. Para sua surpresa, as pessoas se arrependeram! Deus perdoou toda a cidade.
+
+Jonas aprendeu que o amor de Deus é para todas as pessoas! ❤️`,
+    referencia: 'Jonas 1-4',
+    quiz: [
+      { pergunta: 'Para onde Deus mandou Jonas ir?', opcoes: ['Jerusalém', 'Nínive', 'Egito', 'Países Baixos'], correta: 1 },
+      { pergunta: 'Por quantos dias Jonas ficou dentro do peixe?', opcoes: ['1', '2', '3', '7'], correta: 2 },
+      { pergunta: 'O que aconteceu quando Jonas pregou em Nínive?', opcoes: ['Ninguém ouviu', 'As pessoas o expulsaram', 'As pessoas se arrependeram', 'A cidade foi destruída'], correta: 2 },
+    ],
+    vof: [
+      { afirmacao: 'Jonas obedeceu imediatamente quando Deus o chamou.', resposta: false },
+      { afirmacao: 'A tempestade parou quando Jonas foi jogado ao mar.', resposta: true },
+      { afirmacao: 'Jonas ficou no peixe por 3 dias e 3 noites.', resposta: true },
+      { afirmacao: 'Deus não perdoou as pessoas de Nínive.', resposta: false },
+    ],
+  },
+  {
+    id: 'daniel',
+    titulo: 'Daniel na Cova dos Leões',
+    emoji: '🦁',
+    cor: '#d97706',
+    corClara: '#fef3c7',
+    texto: `Daniel era um jovem judeu que foi levado como escravo para a Babilônia. Mas Deus estava com ele! Daniel se tornou um dos conselheiros mais importantes do rei.
+
+Daniel tinha o hábito de orar a Deus três vezes por dia, ajoelhado diante de sua janela aberta em direção a Jerusalém. Era uma prática sagrada para ele.
+
+Mas alguns conselheiros tinham inveja de Daniel e queriam acabar com ele. Eles convenceram o rei Dário a assinar uma lei dizendo que, por 30 dias, ninguém poderia pedir nada a nenhum deus ou homem, exceto ao rei. Quem desobedecesse seria jogado na cova dos leões!
+
+Daniel soube da lei. Mas ele foi para casa, abriu sua janela e orou a Deus como sempre fazia.
+
+Os inimigos correram ao rei para denunciá-lo. O rei ficou muito triste — ele gostava muito de Daniel! Mas a lei não podia ser mudada.
+
+Daniel foi jogado na cova dos leões. O rei passou a noite sem dormir, sem comer, sem música — preocupado com Daniel.
+
+De manhã cedinho, o rei correu até a cova e gritou: "Daniel! Teu Deus, a quem serves continuamente, foi capaz de te livrar dos leões?"
+
+E Daniel respondeu: "Meu Deus enviou seu anjo e fechou a boca dos leões! Eles não me tocaram!"
+
+Daniel saiu sem um arranhão! Deus havia salvado quem permaneceu fiel! 🦁✨`,
+    referencia: 'Daniel 6',
+    quiz: [
+      { pergunta: 'Quantas vezes por dia Daniel orava?', opcoes: ['1', '2', '3', '7'], correta: 2 },
+      { pergunta: 'Por quantos dias durava a lei que proibia orar?', opcoes: ['7', '20', '30', '40'], correta: 2 },
+      { pergunta: 'O que Deus fez para proteger Daniel na cova?', opcoes: ['Removeu os leões', 'Enviou um anjo que fechou a boca dos leões', 'Fez Daniel invisível', 'Domou os leões'], correta: 1 },
+    ],
+    vof: [
+      { afirmacao: 'Daniel parou de orar quando soube da nova lei.', resposta: false },
+      { afirmacao: 'O rei Dário gostava muito de Daniel.', resposta: true },
+      { afirmacao: 'Os leões feriram Daniel.', resposta: false },
+      { afirmacao: 'Deus protegeu Daniel por causa de sua fidelidade.', resposta: true },
+    ],
+  },
+  {
+    id: 'jesus',
+    titulo: 'O Nascimento de Jesus',
+    emoji: '⭐',
+    cor: '#7c3aed',
+    corClara: '#ede9fe',
+    texto: `Há mais de 2000 anos, em Nazaré, vivia uma jovem chamada Maria. Um dia, um anjo chamado Gabriel apareceu para ela com uma mensagem especial de Deus!
+
+O anjo disse: "Salve, Maria! Deus a escolheu para ser a mãe do Filho de Deus. Você vai ter um filho e deverá chamá-lo de Jesus. Ele será grande e reinará para sempre!"
+
+Maria ficou surpresa, mas respondeu com fé: "Que aconteça comigo como você disse!"
+
+Maria era noiva de José, um carpinteiro. Quando ficou grávida, José ficou confuso. Mas um anjo apareceu em sonho para José também: "Não tenha medo de receber Maria como sua esposa. O filho que ela vai ter é do Espírito Santo."
+
+Próximo ao nascimento, o imperador ordenou que todos fossem registrados em suas cidades de origem. José e Maria viajaram de Nazaré a Belém, uma longa jornada!
+
+Belém estava lotada. Não havia lugar nas pousadas. Um estalajadeiro bondoso ofereceu o estábulo dos animais. E foi lá, entre a palha e os animais, que nasceu Jesus!
+
+Maria o embrulhou em faixas de pano e o deitou numa manjedoura.
+
+Anjos anunciaram aos pastores que guardavam seus rebanhos: "Glória a Deus nas alturas! Nasceu o Salvador!" Uma estrela brilhante guiou os Reis Magos que vieram de longe adorar o menino Jesus.
+
+O maior presente que o mundo já recebeu havia chegado! 🌟`,
+    referencia: 'Lucas 1-2, Mateus 1-2',
+    quiz: [
+      { pergunta: 'Qual anjo apareceu para Maria?', opcoes: ['Miguel', 'Rafael', 'Gabriel', 'Uriel'], correta: 2 },
+      { pergunta: 'Em qual cidade Jesus nasceu?', opcoes: ['Nazaré', 'Jerusalém', 'Belém', 'Jericó'], correta: 2 },
+      { pergunta: 'O que Jesus usou como berço?', opcoes: ['Uma cama de madeira', 'Uma manjedoura', 'Um cesto', 'Uma rede'], correta: 1 },
+    ],
+    vof: [
+      { afirmacao: 'Maria aceitou com alegria ser a mãe de Jesus.', resposta: true },
+      { afirmacao: 'José e Maria encontraram facilmente lugar na pousada.', resposta: false },
+      { afirmacao: 'Pastores foram os primeiros a receber a notícia do nascimento.', resposta: true },
+      { afirmacao: 'Jesus nasceu num palácio de rei.', resposta: false },
+    ],
+  },
 ];
 
-const AT_BOOKS = BOOKS.filter(b => b.testament === 'AT');
-const NT_BOOKS = BOOKS.filter(b => b.testament === 'NT');
+// ── Componente principal Kids ──────────────────────────────────────────────
+export default function Kids({ dark, onVoltar }) {
+  const [tela, setTela] = useState('lista'); // 'lista' | 'historia' | 'atividade'
+  const [historiaAtual, setHistoriaAtual] = useState(null);
+  const [atividadeTipo, setAtividadeTipo] = useState('quiz'); // 'quiz' | 'vof'
+  const [respostas, setRespostas] = useState({});
+  const [mostrarResultado, setMostrarResultado] = useState(false);
+  const T = dark ? DARK : LIGHT;
 
-// ── Views ─────────────────────────────────────────────────────────────────
-const VIEW = { HOME: 'home', READER: 'reader', BOOKMARKS: 'bookmarks', HISTORY: 'history', PROFILE: 'profile' };
-
-// ── Busca o JSON normalizado do livro ─────────────────────────────────────
-async function fetchBook(version, bookId) {
-  const res = await fetch(`${BASE}/biblia/${version}/${bookId}.json`);
-  if (!res.ok) throw new Error(`Livro não encontrado: ${bookId}`);
-  return res.json(); // { name, chapters: [["v1","v2",...], ...] }
-}
-
-// ── Componente principal ──────────────────────────────────────────────────
-export default function App() {
-  const [user, setUser]           = useState(null);
-  const [userData, setUserData]   = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-
-  const [view, setView]           = useState(VIEW.HOME);
-  const [bookFilter, setBookFilter] = useState('');
-
-  // Reader state
-  const [bookMeta, setBookMeta]   = useState(null);   // { name, chapters }
-  const [currentBook, setCurrentBook] = useState(null); // { id, name, ... }
-  const [currentChapter, setCurrentChapter] = useState(0); // 0-indexed
-  const [readerLoading, setReaderLoading] = useState(false);
-  const [selectedVerse, setSelectedVerse] = useState(null); // índice do versículo selecionado
-  const [toast, setToast]         = useState('');
-  const toastTimer = useRef(null);
-  const topRef = useRef(null);
-
-  // ── Auth observer ───────────────────────────────────────────────────────
-  useEffect(() => {
-    // Verificar resultado de redirect (iPhone/Safari)
-    // Isso resolve o caso onde o usuário voltou da página do Google
-    checkRedirectResult()
-      .then(redirectUser => {
-        // Se voltou de redirect e tem usuário, o onAuthStateChanged já vai pegar
-        // Não precisa fazer nada aqui
-      })
-      .catch(() => {});
-
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        try {
-          const data = await loadUserData(firebaseUser.uid);
-          setUserData(data);
-        } catch(e) {
-          setUserData({
-            version: 'jfaal',
-            progress: { bookId: 'gn', chapter: 0 },
-            bookmarks: [],
-            history: [],
-          });
-        }
-      } else {
-        setUser(null);
-        setUserData(null);
-      }
-      setAuthLoading(false);
-    });
-    return unsub;
-  }, []);
-
-  // ── Toast helper ────────────────────────────────────────────────────────
-  function showToast(msg) {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(''), 2500);
+  function abrirHistoria(h) {
+    setHistoriaAtual(h);
+    setTela('historia');
+    setRespostas({});
+    setMostrarResultado(false);
   }
 
-  // ── Abrir livro + capítulo ───────────────────────────────────────────────
-  const openBook = useCallback(async (book, chapterIndex = 0) => {
-    setReaderLoading(true);
-    setView(VIEW.READER);
-    setSelectedVerse(null);
-    try {
-      const version = userData?.version || 'jfaal';
-      const data = await fetchBook(version, book.id);
-      setBookMeta(data);
-      setCurrentBook(book);
-      setCurrentChapter(chapterIndex);
-      topRef.current?.scrollIntoView({ behavior: 'smooth' });
-
-      // Salva progresso no Firestore (sem await para não bloquear UI)
-      if (user) {
-        saveProgress(user.uid, book.id, chapterIndex).catch(() => {});
-        addHistory(
-          user.uid,
-          userData?.history || [],
-          { bookId: book.id, bookName: book.name, chapter: chapterIndex }
-        ).then(
-          () => setUserData(prev => ({
-            ...prev,
-            history: [
-              { bookId: book.id, bookName: book.name, chapter: chapterIndex, readAt: new Date().toISOString() },
-              ...(prev?.history || []),
-            ].slice(0, 100),
-            progress: { bookId: book.id, chapter: chapterIndex },
-          }))
-        ).catch(() => {});
-      }
-    } catch (e) {
-      showToast('Erro ao carregar o livro.');
-    } finally {
-      setReaderLoading(false);
-    }
-  }, [userData, user]);
-
-  // ── Trocar capítulo no reader ─────────────────────────────────────────────
-  function goChapter(delta) {
-    const next = currentChapter + delta;
-    if (!bookMeta || next < 0 || next >= bookMeta.chapters.length) return;
-    setCurrentChapter(next);
-    setSelectedVerse(null);
-    topRef.current?.scrollIntoView({ behavior: 'smooth' });
-    if (user) {
-      saveProgress(user.uid, currentBook.id, next).catch(() => {});
-      setUserData(prev => ({ ...prev, progress: { bookId: currentBook.id, chapter: next } }));
-    }
+  function abrirAtividade(tipo) {
+    setAtividadeTipo(tipo);
+    setRespostas({});
+    setMostrarResultado(false);
+    setTela('atividade');
   }
 
-  // ── Marcador ────────────────────────────────────────────────────────────
-  async function handleBookmark(verseIdx) {
-    if (!user) { showToast('Entre com o Google para salvar marcadores.'); return; }
-    const verse = bookMeta.chapters[currentChapter][verseIdx];
-    const bm = {
-      bookId:   currentBook.id,
-      bookName: currentBook.name,
-      chapter:  currentChapter,
-      verse:    verseIdx,
-      text:     verse,
-    };
-    await addBookmark(user.uid, bm);
-    setUserData(prev => ({
-      ...prev,
-      bookmarks: [...(prev.bookmarks || []), { ...bm, addedAt: new Date().toISOString() }],
-    }));
-    showToast('✅ Versículo marcado!');
-    setSelectedVerse(null);
+  function responder(idx, valor) {
+    if (mostrarResultado) return;
+    setRespostas(prev => ({ ...prev, [idx]: valor }));
   }
 
-  async function handleRemoveBookmark(idx) {
-    const updated = (userData.bookmarks || []).filter((_, i) => i !== idx);
-    await removeBookmark(user.uid, userData.bookmarks, idx);
-    setUserData(prev => ({ ...prev, bookmarks: updated }));
-    showToast('Marcador removido.');
+  function verificar() {
+    setMostrarResultado(true);
   }
 
-  // ── Trocar versão ──────────────────────────────────────────────────────
-  async function handleVersionChange(v) {
-    if (!user) return;
-    await saveVersion(user.uid, v);
-    setUserData(prev => ({ ...prev, version: v }));
-    showToast(`Versão alterada para ${v.toUpperCase()}`);
-    // Se estiver no leitor, recarrega o capítulo na nova versão
-    if (view === VIEW.READER && currentBook) {
-      openBook(currentBook, currentChapter);
-    }
+  function calcularPontos() {
+    const perguntas = atividadeTipo === 'quiz' ? historiaAtual.quiz : historiaAtual.vof;
+    return perguntas.filter((p, i) => {
+      if (atividadeTipo === 'quiz') return respostas[i] === p.correta;
+      return respostas[i] === p.resposta;
+    }).length;
   }
 
-  // ── "Continuar lendo" ──────────────────────────────────────────────────
-  function resumeReading() {
-    if (!userData?.progress) return;
-    const { bookId, chapter } = userData.progress;
-    const book = BOOKS.find(b => b.id === bookId);
-    if (book) openBook(book, chapter);
-  }
-
-  // ── Login ───────────────────────────────────────────────────────────────
-  async function handleLogin() {
-    try { await loginGoogle(); }
-    catch (e) { showToast('Erro ao entrar com Google.'); }
-  }
-
-  // ── Render guards ────────────────────────────────────────────────────────
-  if (authLoading) return <Splash />;
-
-  const version = userData?.version || 'jfaal';
-
-  return (
-    <div style={styles.root}>
-      {/* Toast */}
-      {toast && <div style={styles.toast}>{toast}</div>}
-
-      {/* Header */}
-      <header style={styles.header}>
-        <button style={styles.logoBtn} onClick={() => setView(VIEW.HOME)}>
-          📖 <span style={styles.logoText}>Bíblia</span>
-        </button>
-        <nav style={styles.nav}>
-          {user && (
-            <>
-              <NavBtn icon="🔖" label="Marcadores" onClick={() => setView(VIEW.BOOKMARKS)} active={view === VIEW.BOOKMARKS} />
-              <NavBtn icon="🕐" label="Histórico"  onClick={() => setView(VIEW.HISTORY)}   active={view === VIEW.HISTORY} />
-            </>
-          )}
-          <NavBtn icon="👤" label={user ? 'Perfil' : 'Entrar'} onClick={() => user ? setView(VIEW.PROFILE) : handleLogin()} active={view === VIEW.PROFILE} />
-        </nav>
-      </header>
-
-      {/* ── HOME ─────────────────────────────────────────────────────────── */}
-      {view === VIEW.HOME && (
-        <main style={styles.main}>
-          {user && userData?.progress && userData.progress.bookId && (
-            <div style={styles.resumeCard} onClick={resumeReading}>
-              <div style={styles.resumeIcon}>▶</div>
-              <div>
-                <div style={styles.resumeLabel}>Continuar lendo</div>
-                <div style={styles.resumeBook}>
-                  {BOOKS.find(b => b.id === userData.progress.bookId)?.name} — Cap. {userData.progress.chapter + 1}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!user && !authLoading && (
-            <div style={styles.loginBanner}>
-              <p style={{ margin: 0, color: '#64748b' }}>Entre com sua conta Google para salvar sua posição de leitura, marcadores e histórico.</p>
-              <button style={styles.googleBtn} onClick={handleLogin}>
-                <span style={{ fontSize: 18 }}>G</span> Entrar com Google
-              </button>
-            </div>
-          )}
-
-          <input
-            style={styles.search}
-            placeholder="Buscar livro..."
-            value={bookFilter}
-            onChange={e => setBookFilter(e.target.value)}
-          />
-
-          <Section title="Antigo Testamento" books={AT_BOOKS} filter={bookFilter} onSelect={openBook} />
-          <Section title="Novo Testamento"   books={NT_BOOKS} filter={bookFilter} onSelect={openBook} />
-
-          <footer style={styles.footer}>
-            {version === 'jfaal'
-              ? 'As Escrituras em português são da JFAAL, Copyright © Marcos Cristiano Alves Ferreira. Setembro de 2024. Licença CC BY 3.0 BR.'
-              : 'Almeida Revista e Corrigida (ACF) — Domínio Público.'}
-          </footer>
-        </main>
-      )}
-
-      {/* ── READER ────────────────────────────────────────────────────────── */}
-      {view === VIEW.READER && (
-        <main style={styles.main} ref={topRef}>
-          {readerLoading ? (
-            <div style={styles.loading}>Carregando…</div>
-          ) : bookMeta ? (
-            <>
-              <div style={styles.readerHeader}>
-                <button style={styles.backBtn} onClick={() => setView(VIEW.HOME)}>← Livros</button>
-                <div style={styles.readerTitle}>
-                  {currentBook?.name} — Cap. {currentChapter + 1}/{bookMeta.chapters.length}
-                </div>
-                {/* Seletor de capítulo */}
-                <select
-                  style={styles.chapSelect}
-                  value={currentChapter}
-                  onChange={e => {
-                    const ch = Number(e.target.value);
-                    setCurrentChapter(ch);
-                    setSelectedVerse(null);
-                    if (user) saveProgress(user.uid, currentBook.id, ch).catch(() => {});
-                  }}
-                >
-                  {bookMeta.chapters.map((_, i) => (
-                    <option key={i} value={i}>Capítulo {i + 1}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.verses}>
-                {bookMeta.chapters[currentChapter].map((verse, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      ...styles.verseRow,
-                      background: selectedVerse === i ? '#fef9c3' : 'transparent',
-                    }}
-                    onClick={() => setSelectedVerse(selectedVerse === i ? null : i)}
-                  >
-                    <span style={styles.verseNum}>{i + 1}</span>
-                    <span style={styles.verseText}>{verse}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Popup de ação ao selecionar versículo */}
-              {selectedVerse !== null && (
-                <div style={styles.verseActions}>
-                  <button style={styles.actionBtn} onClick={() => handleBookmark(selectedVerse)}>
-                    🔖 Marcar versículo {selectedVerse + 1}
-                  </button>
-                  <button style={styles.actionBtnGhost} onClick={() => setSelectedVerse(null)}>✕ Cancelar</button>
-                </div>
-              )}
-
-              {/* Navegação prev/next */}
-              <div style={styles.chapterNav}>
-                <button style={styles.navBtn} onClick={() => goChapter(-1)} disabled={currentChapter === 0}>
-                  ← Anterior
-                </button>
-                <button style={styles.navBtn} onClick={() => goChapter(1)} disabled={currentChapter === bookMeta.chapters.length - 1}>
-                  Próximo →
-                </button>
-              </div>
-            </>
-          ) : null}
-        </main>
-      )}
-
-      {/* ── MARCADORES ──────────────────────────────────────────────────── */}
-      {view === VIEW.BOOKMARKS && (
-        <main style={styles.main}>
-          <h2 style={styles.sectionTitle}>🔖 Marcadores</h2>
-          {!user ? (
-            <p style={{ color: '#64748b' }}>Entre com o Google para ver seus marcadores.</p>
-          ) : (userData?.bookmarks || []).length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>Nenhum versículo marcado ainda.<br />Toque em um versículo durante a leitura para marcar.</p>
-          ) : (
-            [...(userData.bookmarks || [])].reverse().map((bm, i) => {
-              const realIdx = (userData.bookmarks.length - 1) - i;
-              return (
-                <div key={i} style={styles.bmCard}>
-                  <div style={styles.bmRef} onClick={() => {
-                    const book = BOOKS.find(b => b.id === bm.bookId);
-                    if (book) openBook(book, bm.chapter);
-                  }}>
-                    {bm.bookName} {bm.chapter + 1}:{bm.verse + 1}
-                  </div>
-                  <p style={styles.bmText}>"{bm.text}"</p>
-                  <button style={styles.bmRemove} onClick={() => handleRemoveBookmark(realIdx)}>Remover</button>
-                </div>
-              );
-            })
-          )}
-        </main>
-      )}
-
-      {/* ── HISTÓRICO ────────────────────────────────────────────────────── */}
-      {view === VIEW.HISTORY && (
-        <main style={styles.main}>
-          <h2 style={styles.sectionTitle}>🕐 Histórico de Leitura</h2>
-          {!user ? (
-            <p style={{ color: '#64748b' }}>Entre com o Google para ver seu histórico.</p>
-          ) : (userData?.history || []).length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>Nenhuma leitura registrada ainda.</p>
-          ) : (
-            (userData.history || []).map((h, i) => {
-              const book = BOOKS.find(b => b.id === h.bookId);
-              return (
-                <div key={i} style={styles.histRow} onClick={() => book && openBook(book, h.chapter)}>
-                  <span style={styles.histBook}>{h.bookName} — Cap. {h.chapter + 1}</span>
-                  <span style={styles.histDate}>{new Date(h.readAt).toLocaleDateString('pt-BR')}</span>
-                </div>
-              );
-            })
-          )}
-        </main>
-      )}
-
-      {/* ── PERFIL / CONFIGURAÇÕES ──────────────────────────────────────── */}
-      {view === VIEW.PROFILE && (
-        <main style={styles.main}>
-          {user ? (
-            <>
-              <div style={styles.profileCard}>
-                {user.photoURL && <img src={user.photoURL} alt="" style={styles.avatar} referrerPolicy="no-referrer" />}
-                <div>
-                  <div style={styles.profileName}>{user.displayName}</div>
-                  <div style={styles.profileEmail}>{user.email}</div>
-                </div>
-              </div>
-
-              <div style={styles.settingsSection}>
-                <h3 style={styles.settingsTitle}>⚙️ Configurações</h3>
-
-                <label style={styles.settingLabel}>Versão da Bíblia</label>
-                <div style={styles.versionRow}>
-                  {['jfaal', 'acf'].map(v => (
-                    <button
-                      key={v}
-                      style={{
-                        ...styles.versionBtn,
-                        ...(version === v ? styles.versionBtnActive : {}),
-                      }}
-                      onClick={() => handleVersionChange(v)}
-                    >
-                      {v === 'jfaal' ? 'JFAAL (atual)' : 'ACF (clássica)'}
-                    </button>
-                  ))}
-                </div>
-                <p style={styles.settingHint}>
-                  {version === 'jfaal'
-                    ? 'João Ferreira de Almeida atualizada — linguagem contemporânea.'
-                    : 'Almeida Revista e Corrigida — texto clássico.'}
-                </p>
-
-                <div style={styles.statsRow}>
-                  <div style={styles.statBox}>
-                    <span style={styles.statNum}>{(userData?.bookmarks || []).length}</span>
-                    <span style={styles.statLabel}>Marcadores</span>
-                  </div>
-                  <div style={styles.statBox}>
-                    <span style={styles.statNum}>{(userData?.history || []).length}</span>
-                    <span style={styles.statLabel}>Capítulos lidos</span>
-                  </div>
-                </div>
-              </div>
-
-              <button style={styles.logoutBtn} onClick={() => { logout(); setView(VIEW.HOME); }}>
-                Sair da conta
-              </button>
-            </>
-          ) : (
-            <div style={{ textAlign: 'center', paddingTop: 40 }}>
-              <p style={{ color: '#64748b', marginBottom: 24 }}>Entre com sua conta Google para personalizar o app.</p>
-              <button style={styles.googleBtn} onClick={handleLogin}>
-                <span style={{ fontSize: 18 }}>G</span> Entrar com Google
-              </button>
-            </div>
-          )}
-        </main>
-      )}
-    </div>
-  );
-}
-
-// ── Sub-componentes ─────────────────────────────────────────────────────────
-
-function Splash() {
-  return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', fontSize:32 }}>
-      📖
-      {/* KIDS */}
-      {view === VIEW.KIDS && (
-        <Kids dark={dark} onVoltar={() => setView(VIEW.HOME)} />
-      )}
-    </div>
-  );
-}
-
-function NavBtn({ icon, label, onClick, active }) {
-  return (
-    <button style={{ ...styles.navBtnBase, color: active ? '#2563eb' : '#64748b' }} onClick={onClick} title={label}>
-      <span>{icon}</span>
-      <span style={styles.navLabel}>{label}</span>
-    </button>
-  );
-}
-
-function Section({ title, books, filter, onSelect }) {
-  const filtered = filter
-    ? books.filter(b => b.name.toLowerCase().includes(filter.toLowerCase()) || b.abbrev.toLowerCase().includes(filter.toLowerCase()))
-    : books;
-  if (filtered.length === 0) return null;
-  return (
-    <section style={{ marginBottom: 32 }}>
-      <h3 style={styles.testament}>{title}</h3>
-      <div style={styles.bookGrid}>
-        {filtered.map(b => (
-          <button key={b.id} style={styles.bookCard} onClick={() => onSelect(b, 0)}>
-            <span style={styles.bookAbbrev}>{b.abbrev}</span>
-            <span style={styles.bookName}>{b.name}</span>
+  // ── LISTA ──────────────────────────────────────────────────────────────
+  if (tela === 'lista') return (
+    <div style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
+      <button onClick={onVoltar} style={{ background:'none', border:'none', cursor:'pointer', color: T.accent, fontSize:14, fontFamily:'sans-serif', padding:0, marginBottom:16 }}>← Voltar</button>
+      <div style={{ textAlign:'center', marginBottom:28 }}>
+        <div style={{ fontSize:48, marginBottom:8 }}>📚</div>
+        <h1 style={{ fontSize:24, fontWeight:800, color: T.text, margin:0 }}>Área Kids</h1>
+        <p style={{ color: T.text2, fontFamily:'sans-serif', fontSize:15, marginTop:6 }}>Histórias incríveis da Bíblia para você!</p>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:12 }}>
+        {HISTORIAS.map(h => (
+          <button key={h.id} onClick={() => abrirHistoria(h)}
+            style={{ background: T.cardBg, border:`2px solid ${h.cor}20`, borderRadius:16, padding:'16px 10px', cursor:'pointer', textAlign:'center', transition:'transform .15s', boxShadow:`0 2px 8px ${h.cor}20` }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>{h.emoji}</div>
+            <div style={{ fontSize:13, fontWeight:700, color: T.text, lineHeight:1.3 }}>{h.titulo}</div>
+            <div style={{ fontSize:11, color: T.text3, fontFamily:'sans-serif', marginTop:4 }}>{h.referencia}</div>
           </button>
         ))}
       </div>
-    </section>
+    </div>
   );
+
+  // ── HISTÓRIA ──────────────────────────────────────────────────────────
+  if (tela === 'historia') return (
+    <div style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
+      <button onClick={() => setTela('lista')} style={{ background:'none', border:'none', cursor:'pointer', color: T.accent, fontSize:14, fontFamily:'sans-serif', padding:0, marginBottom:16 }}>← Histórias</button>
+
+      <div style={{ borderRadius:16, overflow:'hidden', marginBottom:20, boxShadow:'0 4px 16px rgba(0,0,0,0.1)' }}>
+        {Ilustracoes[historiaAtual.id]}
+      </div>
+
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+        <span style={{ fontSize:28 }}>{historiaAtual.emoji}</span>
+        <div>
+          <h2 style={{ fontSize:22, fontWeight:800, color: T.text, margin:0 }}>{historiaAtual.titulo}</h2>
+          <span style={{ fontSize:12, color: T.text3, fontFamily:'sans-serif' }}>{historiaAtual.referencia}</span>
+        </div>
+      </div>
+
+      <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:16, padding:20, marginBottom:24, lineHeight:1.9, fontSize:16, color: T.text, whiteSpace:'pre-line' }}>
+        {historiaAtual.texto}
+      </div>
+
+      <div style={{ display:'flex', gap:12, marginBottom:12 }}>
+        <button onClick={() => abrirAtividade('quiz')}
+          style={{ flex:1, padding:'14px', background: historiaAtual.cor, color:'#fff', border:'none', borderRadius:12, cursor:'pointer', fontFamily:'sans-serif', fontSize:15, fontWeight:700 }}>
+          🎯 Quiz
+        </button>
+        <button onClick={() => abrirAtividade('vof')}
+          style={{ flex:1, padding:'14px', background: T.bg3, color: T.text, border:`1px solid ${T.border}`, borderRadius:12, cursor:'pointer', fontFamily:'sans-serif', fontSize:15, fontWeight:700 }}>
+          ✅ Verdadeiro ou Falso
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── ATIVIDADE ──────────────────────────────────────────────────────────
+  if (tela === 'atividade') {
+    const perguntas = atividadeTipo === 'quiz' ? historiaAtual.quiz : historiaAtual.vof;
+    const todasRespondidas = perguntas.every((_, i) => respostas[i] !== undefined);
+    const pontos = mostrarResultado ? calcularPontos() : 0;
+    const total = perguntas.length;
+
+    return (
+      <div style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
+        <button onClick={() => setTela('historia')} style={{ background:'none', border:'none', cursor:'pointer', color: T.accent, fontSize:14, fontFamily:'sans-serif', padding:0, marginBottom:16 }}>← Voltar para a história</button>
+
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <span style={{ fontSize:28 }}>{atividadeTipo === 'quiz' ? '🎯' : '✅'}</span>
+          <h2 style={{ fontSize:20, fontWeight:800, color: T.text, margin:'8px 0 4px' }}>
+            {atividadeTipo === 'quiz' ? 'Quiz' : 'Verdadeiro ou Falso'}
+          </h2>
+          <p style={{ color: T.text2, fontFamily:'sans-serif', fontSize:14, margin:0 }}>{historiaAtual.titulo}</p>
+        </div>
+
+        {mostrarResultado && (
+          <div style={{ background: pontos === total ? '#dcfce7' : pontos >= total/2 ? '#fef3c7' : '#fee2e2', borderRadius:16, padding:20, marginBottom:24, textAlign:'center' }}>
+            <div style={{ fontSize:40, marginBottom:8 }}>
+              {pontos === total ? '🏆' : pontos >= total/2 ? '👍' : '💪'}
+            </div>
+            <div style={{ fontSize:22, fontWeight:800, color: pontos === total ? '#16a34a' : pontos >= total/2 ? '#d97706' : '#dc2626' }}>
+              {pontos} de {total} acertos!
+            </div>
+            <div style={{ fontSize:14, color: '#64748b', fontFamily:'sans-serif', marginTop:4 }}>
+              {pontos === total ? 'Perfeito! Você conhece muito bem essa história!' :
+               pontos >= total/2 ? 'Muito bem! Continue estudando!' :
+               'Que tal ler a história de novo? Você vai se sair melhor!'}
+            </div>
+          </div>
+        )}
+
+        {atividadeTipo === 'quiz' ? (
+          historiaAtual.quiz.map((q, i) => (
+            <div key={i} style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:16, padding:18, marginBottom:14 }}>
+              <p style={{ fontSize:16, fontWeight:700, color: T.text, margin:'0 0 14px' }}>{i+1}. {q.pergunta}</p>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {q.opcoes.map((op, j) => {
+                  let bg = T.bg3;
+                  let cor = T.text;
+                  let borda = T.border;
+                  if (respostas[i] === j) { bg = historiaAtual.cor + '30'; borda = historiaAtual.cor; cor = historiaAtual.cor; }
+                  if (mostrarResultado) {
+                    if (j === q.correta) { bg = '#dcfce7'; borda = '#16a34a'; cor = '#15803d'; }
+                    else if (respostas[i] === j && j !== q.correta) { bg = '#fee2e2'; borda = '#dc2626'; cor = '#dc2626'; }
+                  }
+                  return (
+                    <button key={j} onClick={() => responder(i, j)}
+                      style={{ padding:'12px 14px', background: bg, border:`2px solid ${borda}`, borderRadius:10, cursor: mostrarResultado ? 'default' : 'pointer', textAlign:'left', fontSize:15, color: cor, fontFamily:'sans-serif', fontWeight: respostas[i] === j ? 700 : 400 }}>
+                      {mostrarResultado && j === q.correta ? '✅ ' : mostrarResultado && respostas[i] === j ? '❌ ' : ''}{op}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        ) : (
+          historiaAtual.vof.map((v, i) => {
+            const resp = respostas[i];
+            const certo = mostrarResultado && resp === v.resposta;
+            const errado = mostrarResultado && resp !== undefined && resp !== v.resposta;
+            return (
+              <div key={i} style={{ background: T.cardBg, border:`1px solid ${certo ? '#16a34a' : errado ? '#dc2626' : T.border}`, borderRadius:16, padding:18, marginBottom:14 }}>
+                <p style={{ fontSize:16, fontWeight:600, color: T.text, margin:'0 0 14px' }}>{i+1}. {v.afirmacao}</p>
+                <div style={{ display:'flex', gap:10 }}>
+                  {[true, false].map(val => {
+                    let bg = T.bg3;
+                    let cor = T.text;
+                    let borda = T.border;
+                    if (respostas[i] === val) { bg = historiaAtual.cor + '30'; borda = historiaAtual.cor; cor = historiaAtual.cor; }
+                    if (mostrarResultado) {
+                      if (val === v.resposta) { bg = '#dcfce7'; borda = '#16a34a'; cor = '#15803d'; }
+                      else if (respostas[i] === val) { bg = '#fee2e2'; borda = '#dc2626'; cor = '#dc2626'; }
+                    }
+                    return (
+                      <button key={String(val)} onClick={() => responder(i, val)}
+                        style={{ flex:1, padding:'12px', background: bg, border:`2px solid ${borda}`, borderRadius:10, cursor: mostrarResultado ? 'default' : 'pointer', fontSize:16, color: cor, fontFamily:'sans-serif', fontWeight:700 }}>
+                        {val ? '✅ Verdadeiro' : '❌ Falso'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {!mostrarResultado && (
+          <button onClick={verificar} disabled={!todasRespondidas}
+            style={{ width:'100%', padding:'15px', background: todasRespondidas ? historiaAtual.cor : T.bg3, color: todasRespondidas ? '#fff' : T.text3, border:'none', borderRadius:12, cursor: todasRespondidas ? 'pointer' : 'default', fontFamily:'sans-serif', fontSize:16, fontWeight:700, marginTop:8 }}>
+            {todasRespondidas ? '✔️ Ver resultado' : `Responda todas as ${perguntas.length} perguntas`}
+          </button>
+        )}
+
+        {mostrarResultado && (
+          <div style={{ display:'flex', gap:10, marginTop:8 }}>
+            <button onClick={() => { setRespostas({}); setMostrarResultado(false); }}
+              style={{ flex:1, padding:'13px', background: historiaAtual.cor, color:'#fff', border:'none', borderRadius:12, cursor:'pointer', fontFamily:'sans-serif', fontSize:15, fontWeight:700 }}>
+              🔄 Tentar de novo
+            </button>
+            <button onClick={() => setTela('historia')}
+              style={{ flex:1, padding:'13px', background: T.bg3, color: T.text, border:`1px solid ${T.border}`, borderRadius:12, cursor:'pointer', fontFamily:'sans-serif', fontSize:15 }}>
+              📖 Voltar à história
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 }
-
-// ── Estilos inline ──────────────────────────────────────────────────────────
-const styles = {
-  root: {
-    fontFamily: "'Georgia', serif",
-    background: '#f8fafc',
-    minHeight: '100vh',
-    color: '#1e293b',
-  },
-  header: {
-    position: 'sticky', top: 0, zIndex: 100,
-    background: '#fff',
-    borderBottom: '1px solid #e2e8f0',
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '0 16px', height: 56,
-    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-  },
-  logoBtn: { background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:8, padding:0 },
-  logoText: { fontSize: 18, fontWeight: 700, color: '#1e40af' },
-  nav: { display:'flex', gap:4, alignItems:'center' },
-  navBtnBase: {
-    background: 'none', border: 'none', cursor: 'pointer',
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    fontSize: 20, padding: '4px 10px', gap: 1, borderRadius: 8,
-  },
-  navLabel: { fontSize: 10, marginTop: 1 },
-
-  main: { maxWidth: 680, margin: '0 auto', padding: '20px 16px', paddingBottom: 80 },
-
-  resumeCard: {
-    display: 'flex', alignItems: 'center', gap: 14,
-    background: '#eff6ff', border: '1px solid #bfdbfe',
-    borderRadius: 12, padding: '14px 18px', marginBottom: 20, cursor: 'pointer',
-  },
-  resumeIcon: { fontSize: 20, color: '#2563eb' },
-  resumeLabel: { fontSize: 11, color: '#60a5fa', fontFamily: 'sans-serif', textTransform: 'uppercase', letterSpacing: 1 },
-  resumeBook: { fontSize: 16, fontWeight: 600, color: '#1e40af' },
-
-  loginBanner: {
-    background: '#f1f5f9', borderRadius: 12, padding: 18, marginBottom: 20,
-    display: 'flex', flexDirection: 'column', gap: 12,
-  },
-  googleBtn: {
-    display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center',
-    background: '#fff', border: '1px solid #d1d5db', borderRadius: 8,
-    padding: '10px 20px', cursor: 'pointer', fontFamily: 'sans-serif',
-    fontSize: 14, fontWeight: 600, color: '#374151', boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-  },
-
-  search: {
-    width: '100%', boxSizing: 'border-box',
-    border: '1px solid #e2e8f0', borderRadius: 10,
-    padding: '10px 14px', fontSize: 15, fontFamily: 'sans-serif',
-    marginBottom: 24, background: '#fff', outline: 'none',
-  },
-
-  testament: { fontSize: 12, letterSpacing: 2, color: '#94a3b8', textTransform: 'uppercase', fontFamily: 'sans-serif', marginBottom: 12 },
-  bookGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 },
-  bookCard: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-    padding: '10px 4px', cursor: 'pointer', gap: 3,
-    transition: 'box-shadow .15s', boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-  },
-  bookAbbrev: { fontSize: 13, fontWeight: 700, color: '#1e40af', fontFamily: 'sans-serif' },
-  bookName: { fontSize: 11, color: '#64748b', fontFamily: 'sans-serif', textAlign: 'center' },
-
-  footer: { fontSize: 11, color: '#94a3b8', textAlign: 'center', marginTop: 40, fontFamily: 'sans-serif', lineHeight: 1.6 },
-
-  // Reader
-  readerHeader: {
-    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
-    marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid #e2e8f0',
-  },
-  backBtn: { background:'none', border:'none', cursor:'pointer', color:'#2563eb', fontSize:14, fontFamily:'sans-serif', padding:0 },
-  readerTitle: { flex:1, fontSize:16, fontWeight:700, color:'#1e293b' },
-  chapSelect: { border:'1px solid #e2e8f0', borderRadius:8, padding:'6px 10px', fontFamily:'sans-serif', fontSize:13 },
-
-  verses: { display:'flex', flexDirection:'column', gap:2 },
-  verseRow: {
-    display: 'flex', gap: 10, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
-    transition: 'background .1s',
-  },
-  verseNum: { minWidth: 24, color: '#93c5fd', fontFamily:'sans-serif', fontSize:12, paddingTop:3, textAlign:'right' },
-  verseText: { lineHeight: 1.8, fontSize: 16, color: '#1e293b' },
-
-  verseActions: {
-    position:'fixed', bottom:20, left:'50%', transform:'translateX(-50%)',
-    background:'#1e293b', color:'#fff', borderRadius:14,
-    padding:'10px 18px', display:'flex', gap:12, alignItems:'center',
-    boxShadow:'0 4px 24px rgba(0,0,0,0.2)', zIndex:200,
-  },
-  actionBtn: { background:'#2563eb', color:'#fff', border:'none', borderRadius:8, padding:'8px 14px', cursor:'pointer', fontSize:14, fontFamily:'sans-serif' },
-  actionBtnGhost: { background:'none', color:'#94a3b8', border:'none', cursor:'pointer', fontSize:14, fontFamily:'sans-serif' },
-
-  chapterNav: { display:'flex', justifyContent:'space-between', marginTop:32, paddingTop:16, borderTop:'1px solid #e2e8f0' },
-  navBtn: {
-    background:'#eff6ff', color:'#2563eb', border:'none', borderRadius:8,
-    padding:'10px 20px', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, fontWeight:600,
-  },
-
-  // Bookmarks
-  sectionTitle: { fontSize:20, fontWeight:700, marginBottom:20 },
-  bmCard: {
-    background:'#fff', border:'1px solid #e2e8f0', borderRadius:12,
-    padding:16, marginBottom:12,
-  },
-  bmRef: { fontWeight:700, color:'#2563eb', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, marginBottom:6 },
-  bmText: { color:'#475569', fontSize:15, lineHeight:1.7, margin:'0 0 10px' },
-  bmRemove: { background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:6, padding:'4px 10px', cursor:'pointer', fontSize:12, fontFamily:'sans-serif' },
-
-  // History
-  histRow: {
-    display:'flex', justifyContent:'space-between', alignItems:'center',
-    padding:'12px 0', borderBottom:'1px solid #f1f5f9', cursor:'pointer',
-  },
-  histBook: { fontSize:15, color:'#1e293b' },
-  histDate: { fontSize:12, color:'#94a3b8', fontFamily:'sans-serif' },
-
-  // Profile
-  profileCard: {
-    display:'flex', alignItems:'center', gap:16,
-    background:'#fff', border:'1px solid #e2e8f0', borderRadius:14,
-    padding:20, marginBottom:24,
-  },
-  avatar: { width:56, height:56, borderRadius:'50%' },
-  profileName: { fontWeight:700, fontSize:18 },
-  profileEmail: { color:'#64748b', fontSize:13, fontFamily:'sans-serif' },
-
-  settingsSection: {
-    background:'#fff', border:'1px solid #e2e8f0', borderRadius:14,
-    padding:20, marginBottom:20,
-  },
-  settingsTitle: { fontSize:16, fontWeight:700, marginBottom:18, margin:'0 0 18px' },
-  settingLabel: { fontSize:12, color:'#64748b', textTransform:'uppercase', letterSpacing:1, fontFamily:'sans-serif', display:'block', marginBottom:10 },
-  versionRow: { display:'flex', gap:10, marginBottom:10 },
-  versionBtn: {
-    flex:1, padding:'10px', border:'1px solid #e2e8f0', borderRadius:10,
-    background:'#f8fafc', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, color:'#475569',
-  },
-  versionBtnActive: { background:'#eff6ff', border:'1px solid #93c5fd', color:'#1e40af', fontWeight:700 },
-  settingHint: { fontSize:12, color:'#94a3b8', fontFamily:'sans-serif', margin:'0 0 20px' },
-
-  statsRow: { display:'flex', gap:12, marginTop:8 },
-  statBox: {
-    flex:1, background:'#f8fafc', borderRadius:10, padding:'14px 10px',
-    display:'flex', flexDirection:'column', alignItems:'center',
-  },
-  statNum: { fontSize:24, fontWeight:700, color:'#1e40af' },
-  statLabel: { fontSize:11, color:'#94a3b8', fontFamily:'sans-serif' },
-
-  logoutBtn: {
-    width:'100%', padding:'12px', border:'1px solid #fca5a5',
-    background:'#fff', color:'#dc2626', borderRadius:10, cursor:'pointer',
-    fontFamily:'sans-serif', fontSize:15,
-  },
-
-  // Toast
-  toast: {
-    position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)',
-    background:'#1e293b', color:'#fff', borderRadius:10, padding:'10px 20px',
-    fontFamily:'sans-serif', fontSize:14, zIndex:300, whiteSpace:'nowrap',
-    boxShadow:'0 4px 16px rgba(0,0,0,0.2)',
-  },
-
-  loading: { textAlign:'center', padding:60, color:'#94a3b8', fontFamily:'sans-serif' },
-};
