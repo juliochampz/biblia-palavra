@@ -2,7 +2,8 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect,
-  getRedirectResult, signOut
+  getRedirectResult, signOut,
+  setPersistence, browserLocalPersistence
 } from 'firebase/auth';
 import {
   getFirestore, doc, getDoc,
@@ -18,9 +19,13 @@ const firebaseConfig = {
   appId:             "1:471426587384:web:760fa36f15b977d864390d",
 };
 
-const app  = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db   = getFirestore(app);
+
+// Garante que o login persiste entre sessões no navegador
+setPersistence(auth, browserLocalPersistence).catch(() => {});
+
 const googleProvider = new GoogleAuthProvider();
 
 function isMobile() {
@@ -32,6 +37,7 @@ function isMobile() {
 }
 
 export async function loginGoogle() {
+  await setPersistence(auth, browserLocalPersistence);
   if (isMobile()) {
     await signInWithRedirect(auth, googleProvider);
   } else {
