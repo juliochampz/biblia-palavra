@@ -2,10 +2,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  auth, loginGoogle, logout,
+  auth, loginGoogle, logout, checkRedirectResult,
   loadUserData, saveVersion, saveProgress,
   addBookmark, removeBookmark, addHistory,
 } from './firebase';
+
+// Base path para JSONs (funciona em dev e no GitHub Pages)
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 // ── Lista canônica dos 66 livros ───────────────────────────────────────────
 const BOOKS = [
@@ -85,7 +88,7 @@ const VIEW = { HOME: 'home', READER: 'reader', BOOKMARKS: 'bookmarks', HISTORY: 
 
 // ── Busca o JSON normalizado do livro ─────────────────────────────────────
 async function fetchBook(version, bookId) {
-  const res = await fetch(`/biblia/${version}/${bookId}.json`);
+  const res = await fetch(`${BASE}/biblia/${version}/${bookId}.json`);
   if (!res.ok) throw new Error(`Livro não encontrado: ${bookId}`);
   return res.json(); // { name, chapters: [["v1","v2",...], ...] }
 }
@@ -111,6 +114,9 @@ export default function App() {
 
   // ── Auth observer ───────────────────────────────────────────────────────
   useEffect(() => {
+    // Verificar resultado de redirect (iPhone/Safari)
+    checkRedirectResult().catch(() => {});
+
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
