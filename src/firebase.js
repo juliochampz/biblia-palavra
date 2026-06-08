@@ -23,10 +23,10 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db   = getFirestore(app);
 
-// Garante que o login persiste entre sessões no navegador
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 function isMobile() {
   const ua = navigator.userAgent;
@@ -55,7 +55,7 @@ export async function checkRedirectResult() {
     const result = await getRedirectResult(auth);
     return result ? result.user : null;
   } catch(e) {
-    console.warn('checkRedirectResult error:', e);
+    console.warn('checkRedirectResult:', e);
     return null;
   }
 }
