@@ -299,7 +299,7 @@ export default function App() {
           <footer style={styles.footer}>
             {version === 'jfaal'
               ? 'As Escrituras em português são da JFAAL, Copyright © Marcos Cristiano Alves Ferreira. Setembro de 2024. Licença CC BY 3.0 BR.'
-              : 'Almeida Revista e Corrigida (ARC) — Domínio Público.'}
+              : 'Almeida Revista e Corrigida (ACF) — Domínio Público.'}
           </footer>
         </main>
       )}
@@ -441,7 +441,7 @@ export default function App() {
 
                 <label style={styles.settingLabel}>Versão da Bíblia</label>
                 <div style={styles.versionRow}>
-                  {['jfaal', 'arc'].map(v => (
+                  {['jfaal', 'acf'].map(v => (
                     <button
                       key={v}
                       style={{
@@ -450,7 +450,7 @@ export default function App() {
                       }}
                       onClick={() => handleVersionChange(v)}
                     >
-                      {v === 'jfaal' ? 'JFAAL (atual)' : 'ARC (clássica)'}
+                      {v === 'jfaal' ? 'JFAAL (atual)' : 'ACF (clássica)'}
                     </button>
                   ))}
                 </div>
