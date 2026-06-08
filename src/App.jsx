@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  auth, loginGoogle, logout, checkRedirectResult,
+  auth, registrar, entrar, logout,
   loadUserData, saveVersion, saveProgress,
   addBookmark, removeBookmark, addHistory,
 } from './firebase';
