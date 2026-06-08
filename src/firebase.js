@@ -1,20 +1,12 @@
-// src/firebase.js
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  signOut
+  getAuth, GoogleAuthProvider,
+  signInWithPopup, signInWithRedirect,
+  getRedirectResult, signOut
 } from 'firebase/auth';
 import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  arrayUnion,
+  getFirestore, doc, getDoc,
+  setDoc, updateDoc, arrayUnion,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -29,13 +21,11 @@ const firebaseConfig = {
 const app  = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db   = getFirestore(app);
-
 const googleProvider = new GoogleAuthProvider();
 
-// Detecta se é mobile/Safari para usar redirect em vez de popup
 function isMobileSafari() {
   const ua = navigator.userAgent;
-  return /iPhone|iPad|iPod/i.test(ua) || 
+  return /iPhone|iPad|iPod/i.test(ua) ||
          (/Safari/i.test(ua) && !/Chrome/i.test(ua));
 }
 
@@ -53,23 +43,19 @@ export async function checkRedirectResult() {
   return result?.user || null;
 }
 
-export function logout() {
-  return signOut(auth);
-}
+export function logout() { return signOut(auth); }
 
-function userRef(uid) {
-  return doc(db, 'users', uid);
-}
+function userRef(uid) { return doc(db, 'users', uid); }
 
 export async function loadUserData(uid) {
   const ref  = userRef(uid);
   const snap = await getDoc(ref);
   if (snap.exists()) return snap.data();
   const defaults = {
-    version:   'jfaal',
-    progress:  { bookId: 'gn', chapter: 0 },
+    version: 'jfaal',
+    progress: { bookId: 'gn', chapter: 0 },
     bookmarks: [],
-    history:   [],
+    history: [],
   };
   await setDoc(ref, defaults);
   return defaults;
