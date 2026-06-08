@@ -81,3 +81,7 @@ export async function addHistory(uid, currentHistory, entry) {
   const updated = [item, ...currentHistory].slice(0, 100);
   return updateDoc(userRef(uid), { history: updated });
 }
+
+export function clearHistory(uid) {
+  return updateDoc(userRef(uid), { history: [] });
+}
