@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  auth, loginGoogle, logout, checkRedirectResult,
+  auth, registrar, entrar, logout,
   loadUserData, saveVersion, saveProgress,
   addBookmark, removeBookmark, addHistory,
 } from './firebase';
@@ -79,7 +79,7 @@ const BOOKS = [
 
 const AT_BOOKS = BOOKS.filter(b => b.testament === 'AT');
 const NT_BOOKS = BOOKS.filter(b => b.testament === 'NT');
-const VIEW = { HOME: 'home', READER: 'reader', BOOKMARKS: 'bookmarks', HISTORY: 'history', PROFILE: 'profile' };
+const VIEW = { HOME: 'home', READER: 'reader', BOOKMARKS: 'bookmarks', HISTORY: 'history', PROFILE: 'profile', AUTH: 'auth' };
 
 async function fetchBook(version, bookId) {
   const res = await fetch(`${BASE}/biblia/${version}/${bookId}.json`);
@@ -88,47 +88,41 @@ async function fetchBook(version, bookId) {
 }
 
 const LIGHT = {
-  bg:'#f8fafc', bg2:'#fff', bg3:'#f1f5f9', bg4:'#eff6ff',
+  bg:'#f8fafc', bg2:'#fff', bg3:'#f1f5f9',
   text:'#1e293b', text2:'#64748b', text3:'#94a3b8',
   border:'#e2e8f0', accent:'#1e40af', accentLight:'#bfdbfe',
   accentBg:'#eff6ff', verseNum:'#93c5fd', headerBg:'#fff', cardBg:'#fff',
 };
 const DARK = {
-  bg:'#0f172a', bg2:'#1e293b', bg3:'#1e293b', bg4:'#172554',
+  bg:'#0f172a', bg2:'#1e293b', bg3:'#1e293b',
   text:'#f1f5f9', text2:'#94a3b8', text3:'#64748b',
   border:'#334155', accent:'#60a5fa', accentLight:'#1e40af',
   accentBg:'#172554', verseNum:'#3b82f6', headerBg:'#1e293b', cardBg:'#1e293b',
 };
 
 export default function App() {
-  const [user, setUser]                     = useState(null);
-  const [userData, setUserData]             = useState(null);
-  const [authLoading, setAuthLoading]       = useState(true);
-  const [redirectChecked, setRedirectChecked] = useState(false);
-  const [dark, setDark]                     = useState(() => {
-    try { return localStorage.getItem('darkMode') === '1'; } catch(e) { return false; }
-  });
-  const [view, setView]           = useState(VIEW.HOME);
-  const [bookFilter, setBookFilter] = useState('');
-  const [bookMeta, setBookMeta]   = useState(null);
+  const [user, setUser]               = useState(null);
+  const [userData, setUserData]       = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dark, setDark]               = useState(() => { try { return localStorage.getItem('darkMode') === '1'; } catch(e) { return false; } });
+  const [view, setView]               = useState(VIEW.HOME);
+  const [authMode, setAuthMode]       = useState('login'); // 'login' ou 'register'
+  const [email, setEmail]             = useState('');
+  const [senha, setSenha]             = useState('');
+  const [authError, setAuthError]     = useState('');
+  const [authLoading2, setAuthLoading2] = useState(false);
+  const [bookFilter, setBookFilter]   = useState('');
+  const [bookMeta, setBookMeta]       = useState(null);
   const [currentBook, setCurrentBook] = useState(null);
   const [currentChapter, setCurrentChapter] = useState(0);
   const [readerLoading, setReaderLoading]   = useState(false);
   const [selectedVerse, setSelectedVerse]   = useState(null);
-  const [toast, setToast]         = useState('');
+  const [toast, setToast]             = useState('');
   const toastTimer = useRef(null);
   const topRef     = useRef(null);
   const T = dark ? DARK : LIGHT;
 
-  // Passo 1: checar redirect ANTES do onAuthStateChanged
   useEffect(() => {
-    checkRedirectResult()
-      .finally(() => setRedirectChecked(true));
-  }, []);
-
-  // Passo 2: só ouvir auth depois que o redirect foi verificado
-  useEffect(() => {
-    if (!redirectChecked) return;
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
@@ -145,7 +139,7 @@ export default function App() {
       setAuthLoading(false);
     });
     return unsub;
-  }, [redirectChecked]);
+  }, []);
 
   function toggleDark() {
     const next = !dark;
@@ -157,6 +151,35 @@ export default function App() {
     setToast(msg);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(''), 2500);
+  }
+
+  async function handleAuth() {
+    setAuthError('');
+    setAuthLoading2(true);
+    try {
+      if (authMode === 'register') {
+        await registrar(email, senha);
+        showToast('Conta criada com sucesso!');
+      } else {
+        await entrar(email, senha);
+        showToast('Bem-vindo!');
+      }
+      setView(VIEW.HOME);
+      setEmail('');
+      setSenha('');
+    } catch(e) {
+      const msgs = {
+        'auth/email-already-in-use': 'Este email já está cadastrado.',
+        'auth/invalid-email': 'Email inválido.',
+        'auth/weak-password': 'Senha muito fraca (mín. 6 caracteres).',
+        'auth/user-not-found': 'Email não encontrado.',
+        'auth/wrong-password': 'Senha incorreta.',
+        'auth/invalid-credential': 'Email ou senha incorretos.',
+      };
+      setAuthError(msgs[e.code] || 'Erro ao entrar. Tente novamente.');
+    } finally {
+      setAuthLoading2(false);
+    }
   }
 
   const openBook = useCallback(async (book, chapterIndex = 0) => {
@@ -199,12 +222,12 @@ export default function App() {
   }
 
   async function handleBookmark(verseIdx) {
-    if (!user) { showToast('Entre com o Google para salvar marcadores.'); return; }
+    if (!user) { showToast('Entre para salvar marcadores.'); return; }
     const verse = bookMeta.chapters[currentChapter][verseIdx];
     const bm = { bookId: currentBook.id, bookName: currentBook.name, chapter: currentChapter, verse: verseIdx, text: verse };
     await addBookmark(user.uid, bm);
     setUserData(prev => ({ ...prev, bookmarks: [...(prev.bookmarks || []), { ...bm, addedAt: new Date().toISOString() }] }));
-    showToast('Versículo marcado!');
+    showToast('✅ Versículo marcado!');
     setSelectedVerse(null);
   }
 
@@ -230,18 +253,7 @@ export default function App() {
     if (book) openBook(book, chapter);
   }
 
-  async function handleLogin() {
-    try { await loginGoogle(); }
-    catch(e) { showToast('Erro ao entrar com Google.'); }
-  }
-
-  if (!redirectChecked || authLoading) {
-    return (
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background: dark ? '#0f172a' : '#fff', fontSize:32 }}>
-        📖
-      </div>
-    );
-  }
+  if (authLoading) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background: dark ? '#0f172a' : '#fff', fontSize:32 }}>📖</div>;
 
   const version = userData?.version || 'jfaal';
 
@@ -267,10 +279,63 @@ export default function App() {
               <NavBtn icon="🕐" label="Histórico"  onClick={() => setView(VIEW.HISTORY)}   active={view === VIEW.HISTORY} T={T} />
             </>
           )}
-          <NavBtn icon="👤" label={user ? 'Perfil' : 'Entrar'} onClick={() => user ? setView(VIEW.PROFILE) : handleLogin()} active={view === VIEW.PROFILE} T={T} />
+          <NavBtn icon="👤" label={user ? 'Perfil' : 'Entrar'} onClick={() => user ? setView(VIEW.PROFILE) : setView(VIEW.AUTH)} active={view === VIEW.PROFILE || view === VIEW.AUTH} T={T} />
         </nav>
       </header>
 
+      {/* TELA DE LOGIN/CADASTRO */}
+      {view === VIEW.AUTH && (
+        <main style={{ maxWidth:400, margin:'0 auto', padding:'40px 20px' }}>
+          <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:16, padding:28 }}>
+            <div style={{ textAlign:'center', marginBottom:24 }}>
+              <div style={{ fontSize:40, marginBottom:8 }}>📖</div>
+              <h2 style={{ fontSize:22, fontWeight:700, color: T.text, margin:0 }}>
+                {authMode === 'login' ? 'Entrar' : 'Criar conta'}
+              </h2>
+              <p style={{ color: T.text2, fontFamily:'sans-serif', fontSize:14, marginTop:6 }}>
+                {authMode === 'login' ? 'Acesse sua conta para continuar' : 'Crie sua conta gratuita'}
+              </p>
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <input
+                type="email"
+                placeholder="Seu email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                style={{ padding:'12px 14px', border:`1px solid ${T.border}`, borderRadius:10, fontSize:15, fontFamily:'sans-serif', background: T.bg, color: T.text, outline:'none' }}
+              />
+              <input
+                type="password"
+                placeholder="Senha (mín. 6 caracteres)"
+                value={senha}
+                onChange={e => setSenha(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAuth()}
+                style={{ padding:'12px 14px', border:`1px solid ${T.border}`, borderRadius:10, fontSize:15, fontFamily:'sans-serif', background: T.bg, color: T.text, outline:'none' }}
+              />
+
+              {authError && (
+                <p style={{ color:'#dc2626', fontFamily:'sans-serif', fontSize:13, margin:0, textAlign:'center' }}>{authError}</p>
+              )}
+
+              <button
+                onClick={handleAuth}
+                disabled={authLoading2}
+                style={{ padding:'13px', background: T.accent, color:'#fff', border:'none', borderRadius:10, fontSize:16, fontFamily:'sans-serif', fontWeight:600, cursor:'pointer' }}>
+                {authLoading2 ? 'Aguarde...' : (authMode === 'login' ? 'Entrar' : 'Criar conta')}
+              </button>
+
+              <button
+                onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
+                style={{ background:'none', border:'none', color: T.accent, fontFamily:'sans-serif', fontSize:14, cursor:'pointer', padding:4 }}>
+                {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
+              </button>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* HOME */}
       {view === VIEW.HOME && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           {user && userData?.progress?.bookId && (
@@ -287,9 +352,9 @@ export default function App() {
 
           {!user && (
             <div style={{ background: T.bg3, borderRadius:12, padding:18, marginBottom:20, display:'flex', flexDirection:'column', gap:12 }}>
-              <p style={{ margin:0, color: T.text2 }}>Entre com sua conta Google para salvar sua posição de leitura, marcadores e histórico.</p>
-              <button onClick={handleLogin} style={{ display:'flex', alignItems:'center', gap:10, justifyContent:'center', background: T.bg2, border:`1px solid ${T.border}`, borderRadius:8, padding:'10px 20px', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, fontWeight:600, color: T.text }}>
-                <span style={{ fontSize:18 }}>G</span> Entrar com Google
+              <p style={{ margin:0, color: T.text2, fontFamily:'sans-serif' }}>Entre para salvar sua posição de leitura, marcadores e histórico.</p>
+              <button onClick={() => setView(VIEW.AUTH)} style={{ background: T.accent, color:'#fff', border:'none', borderRadius:8, padding:'11px 20px', cursor:'pointer', fontFamily:'sans-serif', fontSize:15, fontWeight:600 }}>
+                Entrar / Criar conta
               </button>
             </div>
           )}
@@ -306,6 +371,7 @@ export default function App() {
         </main>
       )}
 
+      {/* READER */}
       {view === VIEW.READER && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }} ref={topRef}>
           {readerLoading ? (
@@ -349,64 +415,55 @@ export default function App() {
         </main>
       )}
 
+      {/* MARCADORES */}
       {view === VIEW.BOOKMARKS && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           <h2 style={{ fontSize:20, fontWeight:700, marginBottom:20, color: T.text }}>🔖 Marcadores</h2>
-          {!user ? (
-            <p style={{ color: T.text2 }}>Entre com o Google para ver seus marcadores.</p>
-          ) : (userData?.bookmarks || []).length === 0 ? (
-            <p style={{ color: T.text3 }}>Nenhum versículo marcado ainda.</p>
-          ) : (
-            [...(userData.bookmarks || [])].reverse().map((bm, i) => {
-              const realIdx = (userData.bookmarks.length - 1) - i;
-              return (
-                <div key={i} style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:12, padding:16, marginBottom:12 }}>
-                  <div style={{ fontWeight:700, color: T.accent, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, marginBottom:6 }}
-                    onClick={() => { const book = BOOKS.find(b => b.id === bm.bookId); if (book) openBook(book, bm.chapter); }}>
-                    {bm.bookName} {bm.chapter + 1}:{bm.verse + 1}
-                  </div>
-                  <p style={{ color: T.text2, fontSize:15, lineHeight:1.7, margin:'0 0 10px' }}>"{bm.text}"</p>
-                  <button style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:6, padding:'4px 10px', cursor:'pointer', fontSize:12, fontFamily:'sans-serif' }}
-                    onClick={() => handleRemoveBookmark(realIdx)}>Remover</button>
+          {!user ? <p style={{ color: T.text2 }}>Entre para ver seus marcadores.</p>
+          : (userData?.bookmarks || []).length === 0 ? <p style={{ color: T.text3 }}>Nenhum versículo marcado ainda.</p>
+          : [...(userData.bookmarks || [])].reverse().map((bm, i) => {
+            const realIdx = (userData.bookmarks.length - 1) - i;
+            return (
+              <div key={i} style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:12, padding:16, marginBottom:12 }}>
+                <div style={{ fontWeight:700, color: T.accent, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, marginBottom:6 }}
+                  onClick={() => { const book = BOOKS.find(b => b.id === bm.bookId); if (book) openBook(book, bm.chapter); }}>
+                  {bm.bookName} {bm.chapter + 1}:{bm.verse + 1}
                 </div>
-              );
-            })
-          )}
+                <p style={{ color: T.text2, fontSize:15, lineHeight:1.7, margin:'0 0 10px' }}>"{bm.text}"</p>
+                <button style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:6, padding:'4px 10px', cursor:'pointer', fontSize:12, fontFamily:'sans-serif' }}
+                  onClick={() => handleRemoveBookmark(realIdx)}>Remover</button>
+              </div>
+            );
+          })}
         </main>
       )}
 
+      {/* HISTÓRICO */}
       {view === VIEW.HISTORY && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
-          <h2 style={{ fontSize:20, fontWeight:700, marginBottom:20, color: T.text }}>🕐 Histórico de Leitura</h2>
-          {!user ? (
-            <p style={{ color: T.text2 }}>Entre com o Google para ver seu histórico.</p>
-          ) : (userData?.history || []).length === 0 ? (
-            <p style={{ color: T.text3 }}>Nenhuma leitura registrada ainda.</p>
-          ) : (
-            (userData.history || []).map((h, i) => {
-              const book = BOOKS.find(b => b.id === h.bookId);
-              return (
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:`1px solid ${T.border}`, cursor:'pointer' }}
-                  onClick={() => book && openBook(book, h.chapter)}>
-                  <span style={{ fontSize:15, color: T.text }}>{h.bookName} — Cap. {h.chapter + 1}</span>
-                  <span style={{ fontSize:12, color: T.text3, fontFamily:'sans-serif' }}>{new Date(h.readAt).toLocaleDateString('pt-BR')}</span>
-                </div>
-              );
-            })
-          )}
+          <h2 style={{ fontSize:20, fontWeight:700, marginBottom:20, color: T.text }}>🕐 Histórico</h2>
+          {!user ? <p style={{ color: T.text2 }}>Entre para ver seu histórico.</p>
+          : (userData?.history || []).length === 0 ? <p style={{ color: T.text3 }}>Nenhuma leitura registrada ainda.</p>
+          : (userData.history || []).map((h, i) => {
+            const book = BOOKS.find(b => b.id === h.bookId);
+            return (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:`1px solid ${T.border}`, cursor:'pointer' }}
+                onClick={() => book && openBook(book, h.chapter)}>
+                <span style={{ fontSize:15, color: T.text }}>{h.bookName} — Cap. {h.chapter + 1}</span>
+                <span style={{ fontSize:12, color: T.text3, fontFamily:'sans-serif' }}>{new Date(h.readAt).toLocaleDateString('pt-BR')}</span>
+              </div>
+            );
+          })}
         </main>
       )}
 
+      {/* PERFIL */}
       {view === VIEW.PROFILE && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           {user ? (
             <>
-              <div style={{ display:'flex', alignItems:'center', gap:16, background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:14, padding:20, marginBottom:24 }}>
-                {user.photoURL && <img src={user.photoURL} alt="" style={{ width:56, height:56, borderRadius:'50%' }} referrerPolicy="no-referrer" />}
-                <div>
-                  <div style={{ fontWeight:700, fontSize:18, color: T.text }}>{user.displayName}</div>
-                  <div style={{ color: T.text2, fontSize:13, fontFamily:'sans-serif' }}>{user.email}</div>
-                </div>
+              <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:14, padding:20, marginBottom:24 }}>
+                <div style={{ fontSize:18, fontWeight:700, color: T.text }}>{user.email}</div>
               </div>
 
               <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:14, padding:20, marginBottom:20 }}>
@@ -416,14 +473,14 @@ export default function App() {
                 <div style={{ display:'flex', gap:10, marginBottom:20 }}>
                   {[['☀️ Claro', false], ['🌙 Escuro', true]].map(([label, val]) => (
                     <button key={String(val)} onClick={() => { setDark(val); try { localStorage.setItem('darkMode', val ? '1' : '0'); } catch(e) {} }}
-                      style={{ flex:1, padding:10, border:`1px solid ${dark === val ? T.accentLight : T.border}`, borderRadius:10, background: dark === val ? T.accentBg : T.bg3, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, color: dark === val ? T.accent : T.text2, fontWeight: dark === val ? 700 : 400 }}>
+                      style={{ flex:1, padding:10, border:`1px solid ${dark===val ? T.accentLight : T.border}`, borderRadius:10, background: dark===val ? T.accentBg : T.bg3, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, color: dark===val ? T.accent : T.text2, fontWeight: dark===val ? 700 : 400 }}>
                       {label}
                     </button>
                   ))}
                 </div>
 
                 <label style={{ fontSize:12, color: T.text2, textTransform:'uppercase', letterSpacing:1, fontFamily:'sans-serif', display:'block', marginBottom:10 }}>Versão da Bíblia</label>
-                <div style={{ display:'flex', gap:10, marginBottom:10 }}>
+                <div style={{ display:'flex', gap:10, marginBottom:20 }}>
                   {['jfaal','acf'].map(v => (
                     <button key={v} onClick={() => handleVersionChange(v)}
                       style={{ flex:1, padding:10, border:`1px solid ${version===v ? T.accentLight : T.border}`, borderRadius:10, background: version===v ? T.accentBg : T.bg3, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, color: version===v ? T.accent : T.text2, fontWeight: version===v ? 700 : 400 }}>
@@ -431,9 +488,6 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <p style={{ fontSize:12, color: T.text3, fontFamily:'sans-serif', margin:'0 0 20px' }}>
-                  {version === 'jfaal' ? 'João Ferreira de Almeida atualizada — linguagem contemporânea.' : 'Almeida Corrigida Fiel — texto clássico.'}
-                </p>
 
                 <div style={{ display:'flex', gap:12 }}>
                   <div style={{ flex:1, background: T.bg3, borderRadius:10, padding:'14px 10px', display:'flex', flexDirection:'column', alignItems:'center' }}>
@@ -454,9 +508,8 @@ export default function App() {
             </>
           ) : (
             <div style={{ textAlign:'center', paddingTop:40 }}>
-              <p style={{ color: T.text2, marginBottom:24 }}>Entre com sua conta Google.</p>
-              <button onClick={handleLogin} style={{ display:'flex', alignItems:'center', gap:10, justifyContent:'center', background: T.bg2, border:`1px solid ${T.border}`, borderRadius:8, padding:'10px 20px', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, fontWeight:600, color: T.text, margin:'0 auto' }}>
-                <span style={{ fontSize:18 }}>G</span> Entrar com Google
+              <button onClick={() => setView(VIEW.AUTH)} style={{ background: T.accent, color:'#fff', border:'none', borderRadius:8, padding:'12px 24px', cursor:'pointer', fontFamily:'sans-serif', fontSize:15, fontWeight:600 }}>
+                Entrar / Criar conta
               </button>
             </div>
           )}
