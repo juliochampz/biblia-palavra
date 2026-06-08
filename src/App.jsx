@@ -8,7 +8,7 @@ import {
 } from './firebase';
 import Kids from './Kids';
 
-// Base path para JSONs (funciona em dev e no GitHub Pages)
+// Base path para JSONs
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 // ── Lista canônica dos 66 livros ───────────────────────────────────────────
