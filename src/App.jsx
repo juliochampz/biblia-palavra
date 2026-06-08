@@ -106,7 +106,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [dark, setDark]               = useState(() => { try { return localStorage.getItem('darkMode') === '1'; } catch(e) { return false; } });
   const [view, setView]               = useState(VIEW.HOME);
-  const [authMode, setAuthMode]       = useState('login'); // 'login' ou 'register'
+  const [authMode, setAuthMode]       = useState('login');
   const [email, setEmail]             = useState('');
   const [senha, setSenha]             = useState('');
   const [authError, setAuthError]     = useState('');
@@ -118,6 +118,7 @@ export default function App() {
   const [readerLoading, setReaderLoading]   = useState(false);
   const [selectedVerse, setSelectedVerse]   = useState(null);
   const [toast, setToast]             = useState('');
+  const [confirmLimpar, setConfirmLimpar] = useState(false);
   const toastTimer = useRef(null);
   const topRef     = useRef(null);
   const T = dark ? DARK : LIGHT;
@@ -180,6 +181,15 @@ export default function App() {
     } finally {
       setAuthLoading2(false);
     }
+  }
+
+  async function limparHistorico() {
+    const { updateDoc, doc } = await import('firebase/firestore');
+    const { db } = await import('./firebase');
+    await updateDoc(doc(db, 'users', user.uid), { history: [] });
+    setUserData(prev => ({ ...prev, history: [] }));
+    setConfirmLimpar(false);
+    showToast('Histórico limpo!');
   }
 
   const openBook = useCallback(async (book, chapterIndex = 0) => {
@@ -283,7 +293,7 @@ export default function App() {
         </nav>
       </header>
 
-      {/* TELA DE LOGIN/CADASTRO */}
+      {/* AUTH */}
       {view === VIEW.AUTH && (
         <main style={{ maxWidth:400, margin:'0 auto', padding:'40px 20px' }}>
           <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:16, padding:28 }}>
@@ -296,37 +306,17 @@ export default function App() {
                 {authMode === 'login' ? 'Acesse sua conta para continuar' : 'Crie sua conta gratuita'}
               </p>
             </div>
-
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-              <input
-                type="email"
-                placeholder="Seu email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={{ padding:'12px 14px', border:`1px solid ${T.border}`, borderRadius:10, fontSize:15, fontFamily:'sans-serif', background: T.bg, color: T.text, outline:'none' }}
-              />
-              <input
-                type="password"
-                placeholder="Senha (mín. 6 caracteres)"
-                value={senha}
-                onChange={e => setSenha(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAuth()}
-                style={{ padding:'12px 14px', border:`1px solid ${T.border}`, borderRadius:10, fontSize:15, fontFamily:'sans-serif', background: T.bg, color: T.text, outline:'none' }}
-              />
-
-              {authError && (
-                <p style={{ color:'#dc2626', fontFamily:'sans-serif', fontSize:13, margin:0, textAlign:'center' }}>{authError}</p>
-              )}
-
-              <button
-                onClick={handleAuth}
-                disabled={authLoading2}
+              <input type="email" placeholder="Seu email" value={email} onChange={e => setEmail(e.target.value)}
+                style={{ padding:'12px 14px', border:`1px solid ${T.border}`, borderRadius:10, fontSize:15, fontFamily:'sans-serif', background: T.bg, color: T.text, outline:'none' }} />
+              <input type="password" placeholder="Senha (mín. 6 caracteres)" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()}
+                style={{ padding:'12px 14px', border:`1px solid ${T.border}`, borderRadius:10, fontSize:15, fontFamily:'sans-serif', background: T.bg, color: T.text, outline:'none' }} />
+              {authError && <p style={{ color:'#dc2626', fontFamily:'sans-serif', fontSize:13, margin:0, textAlign:'center' }}>{authError}</p>}
+              <button onClick={handleAuth} disabled={authLoading2}
                 style={{ padding:'13px', background: T.accent, color:'#fff', border:'none', borderRadius:10, fontSize:16, fontFamily:'sans-serif', fontWeight:600, cursor:'pointer' }}>
                 {authLoading2 ? 'Aguarde...' : (authMode === 'login' ? 'Entrar' : 'Criar conta')}
               </button>
-
-              <button
-                onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
+              <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
                 style={{ background:'none', border:'none', color: T.accent, fontFamily:'sans-serif', fontSize:14, cursor:'pointer', padding:4 }}>
                 {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
               </button>
@@ -349,7 +339,6 @@ export default function App() {
               </div>
             </div>
           )}
-
           {!user && (
             <div style={{ background: T.bg3, borderRadius:12, padding:18, marginBottom:20, display:'flex', flexDirection:'column', gap:12 }}>
               <p style={{ margin:0, color: T.text2, fontFamily:'sans-serif' }}>Entre para salvar sua posição de leitura, marcadores e histórico.</p>
@@ -358,13 +347,10 @@ export default function App() {
               </button>
             </div>
           )}
-
           <input style={{ width:'100%', boxSizing:'border-box', border:`1px solid ${T.border}`, borderRadius:10, padding:'10px 14px', fontSize:15, fontFamily:'sans-serif', marginBottom:24, background: T.bg2, color: T.text, outline:'none' }}
             placeholder="Buscar livro..." value={bookFilter} onChange={e => setBookFilter(e.target.value)} />
-
           <Section title="Antigo Testamento" books={AT_BOOKS} filter={bookFilter} onSelect={openBook} T={T} />
           <Section title="Novo Testamento"   books={NT_BOOKS} filter={bookFilter} onSelect={openBook} T={T} />
-
           <footer style={{ fontSize:11, color: T.text3, textAlign:'center', marginTop:40, fontFamily:'sans-serif', lineHeight:1.6 }}>
             {version === 'jfaal' ? 'As Escrituras em português são da JFAAL, Copyright © Marcos Cristiano Alves Ferreira. Setembro de 2024. Licença CC BY 3.0 BR.' : 'Almeida Corrigida Fiel (ACF) — Domínio Público.'}
           </footer>
@@ -386,7 +372,6 @@ export default function App() {
                   {bookMeta.chapters.map((_, i) => <option key={i} value={i}>Capítulo {i + 1}</option>)}
                 </select>
               </div>
-
               <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
                 {bookMeta.chapters[currentChapter].map((verse, i) => (
                   <div key={i} style={{ display:'flex', gap:10, padding:'8px 6px', borderRadius:8, cursor:'pointer', background: selectedVerse === i ? (dark ? '#422006' : '#fef9c3') : 'transparent' }}
@@ -396,7 +381,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
               {selectedVerse !== null && (
                 <div style={{ position:'fixed', bottom:20, left:'50%', transform:'translateX(-50%)', background:'#1e293b', color:'#fff', borderRadius:14, padding:'10px 18px', display:'flex', gap:12, alignItems:'center', boxShadow:'0 4px 24px rgba(0,0,0,0.3)', zIndex:200 }}>
                   <button style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:8, padding:'8px 14px', cursor:'pointer', fontSize:14, fontFamily:'sans-serif' }} onClick={() => handleBookmark(selectedVerse)}>
@@ -405,7 +389,6 @@ export default function App() {
                   <button style={{ background:'none', color:'#94a3b8', border:'none', cursor:'pointer', fontSize:14, fontFamily:'sans-serif' }} onClick={() => setSelectedVerse(null)}>✕</button>
                 </div>
               )}
-
               <div style={{ display:'flex', justifyContent:'space-between', marginTop:32, paddingTop:16, borderTop:`1px solid ${T.border}` }}>
                 <button style={{ background: T.accentBg, color: T.accent, border:'none', borderRadius:8, padding:'10px 20px', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, fontWeight:600 }} onClick={() => goChapter(-1)} disabled={currentChapter === 0}>← Anterior</button>
                 <button style={{ background: T.accentBg, color: T.accent, border:'none', borderRadius:8, padding:'10px 20px', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, fontWeight:600 }} onClick={() => goChapter(1)} disabled={currentChapter === bookMeta.chapters.length - 1}>Próximo →</button>
@@ -441,7 +424,32 @@ export default function App() {
       {/* HISTÓRICO */}
       {view === VIEW.HISTORY && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
-          <h2 style={{ fontSize:20, fontWeight:700, marginBottom:20, color: T.text }}>🕐 Histórico</h2>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+            <h2 style={{ fontSize:20, fontWeight:700, color: T.text, margin:0 }}>🕐 Histórico</h2>
+            {user && (userData?.history || []).length > 0 && (
+              <button onClick={() => setConfirmLimpar(true)}
+                style={{ background:'none', border:`1px solid #fca5a5`, color:'#dc2626', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:13, fontFamily:'sans-serif' }}>
+                Limpar tudo
+              </button>
+            )}
+          </div>
+
+          {confirmLimpar && (
+            <div style={{ background: T.cardBg, border:`1px solid #fca5a5`, borderRadius:12, padding:16, marginBottom:16 }}>
+              <p style={{ color: T.text, fontFamily:'sans-serif', fontSize:14, margin:'0 0 12px' }}>Tem certeza que deseja limpar todo o histórico?</p>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={limparHistorico}
+                  style={{ flex:1, padding:'9px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, cursor:'pointer', fontFamily:'sans-serif', fontSize:14 }}>
+                  Sim, limpar
+                </button>
+                <button onClick={() => setConfirmLimpar(false)}
+                  style={{ flex:1, padding:'9px', background: T.bg3, color: T.text2, border:`1px solid ${T.border}`, borderRadius:8, cursor:'pointer', fontFamily:'sans-serif', fontSize:14 }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           {!user ? <p style={{ color: T.text2 }}>Entre para ver seu histórico.</p>
           : (userData?.history || []).length === 0 ? <p style={{ color: T.text3 }}>Nenhuma leitura registrada ainda.</p>
           : (userData.history || []).map((h, i) => {
@@ -465,10 +473,8 @@ export default function App() {
               <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:14, padding:20, marginBottom:24 }}>
                 <div style={{ fontSize:18, fontWeight:700, color: T.text }}>{user.email}</div>
               </div>
-
               <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:14, padding:20, marginBottom:20 }}>
                 <h3 style={{ fontSize:16, fontWeight:700, margin:'0 0 18px', color: T.text }}>⚙️ Configurações</h3>
-
                 <label style={{ fontSize:12, color: T.text2, textTransform:'uppercase', letterSpacing:1, fontFamily:'sans-serif', display:'block', marginBottom:10 }}>Aparência</label>
                 <div style={{ display:'flex', gap:10, marginBottom:20 }}>
                   {[['☀️ Claro', false], ['🌙 Escuro', true]].map(([label, val]) => (
@@ -478,7 +484,6 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-
                 <label style={{ fontSize:12, color: T.text2, textTransform:'uppercase', letterSpacing:1, fontFamily:'sans-serif', display:'block', marginBottom:10 }}>Versão da Bíblia</label>
                 <div style={{ display:'flex', gap:10, marginBottom:20 }}>
                   {['jfaal','acf'].map(v => (
@@ -488,7 +493,6 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-
                 <div style={{ display:'flex', gap:12 }}>
                   <div style={{ flex:1, background: T.bg3, borderRadius:10, padding:'14px 10px', display:'flex', flexDirection:'column', alignItems:'center' }}>
                     <span style={{ fontSize:24, fontWeight:700, color: T.accent }}>{(userData?.bookmarks||[]).length}</span>
@@ -500,7 +504,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-
               <button onClick={() => { logout(); setView(VIEW.HOME); }}
                 style={{ width:'100%', padding:12, border:'1px solid #fca5a5', background: T.bg2, color:'#dc2626', borderRadius:10, cursor:'pointer', fontFamily:'sans-serif', fontSize:15 }}>
                 Sair da conta
