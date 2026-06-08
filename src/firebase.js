@@ -1,9 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth, GoogleAuthProvider,
-  signInWithPopup, signInWithRedirect,
-  getRedirectResult, signOut,
-  setPersistence, browserLocalPersistence
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import {
   getFirestore, doc, getDoc,
@@ -25,39 +27,16 @@ export const db   = getFirestore(app);
 
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
-const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
-
-function isMobile() {
-  const ua = navigator.userAgent;
-  return ua.indexOf('iPhone') > -1 ||
-         ua.indexOf('iPad') > -1 ||
-         ua.indexOf('iPod') > -1 ||
-         ua.indexOf('Android') > -1;
-}
-
-export async function loginGoogle() {
+export async function registrar(email, senha) {
   await setPersistence(auth, browserLocalPersistence);
-  if (isMobile()) {
-    await signInWithRedirect(auth, googleProvider);
-  } else {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      return result.user;
-    } catch(e) {
-      await signInWithRedirect(auth, googleProvider);
-    }
-  }
+  const result = await createUserWithEmailAndPassword(auth, email, senha);
+  return result.user;
 }
 
-export async function checkRedirectResult() {
-  try {
-    const result = await getRedirectResult(auth);
-    return result ? result.user : null;
-  } catch(e) {
-    console.warn('checkRedirectResult:', e);
-    return null;
-  }
+export async function entrar(email, senha) {
+  await setPersistence(auth, browserLocalPersistence);
+  const result = await signInWithEmailAndPassword(auth, email, senha);
+  return result.user;
 }
 
 export function logout() { return signOut(auth); }
