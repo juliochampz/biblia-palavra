@@ -87,41 +87,48 @@ async function fetchBook(version, bookId) {
   return res.json();
 }
 
-// Temas claro e escuro
 const LIGHT = {
-  bg: '#f8fafc', bg2: '#fff', bg3: '#f1f5f9', bg4: '#eff6ff',
-  text: '#1e293b', text2: '#64748b', text3: '#94a3b8',
-  border: '#e2e8f0', accent: '#1e40af', accentLight: '#bfdbfe',
-  accentBg: '#eff6ff', verseNum: '#93c5fd',
-  headerBg: '#fff', cardBg: '#fff',
+  bg:'#f8fafc', bg2:'#fff', bg3:'#f1f5f9', bg4:'#eff6ff',
+  text:'#1e293b', text2:'#64748b', text3:'#94a3b8',
+  border:'#e2e8f0', accent:'#1e40af', accentLight:'#bfdbfe',
+  accentBg:'#eff6ff', verseNum:'#93c5fd', headerBg:'#fff', cardBg:'#fff',
 };
 const DARK = {
-  bg: '#0f172a', bg2: '#1e293b', bg3: '#1e293b', bg4: '#172554',
-  text: '#f1f5f9', text2: '#94a3b8', text3: '#64748b',
-  border: '#334155', accent: '#60a5fa', accentLight: '#1e40af',
-  accentBg: '#172554', verseNum: '#3b82f6',
-  headerBg: '#1e293b', cardBg: '#1e293b',
+  bg:'#0f172a', bg2:'#1e293b', bg3:'#1e293b', bg4:'#172554',
+  text:'#f1f5f9', text2:'#94a3b8', text3:'#64748b',
+  border:'#334155', accent:'#60a5fa', accentLight:'#1e40af',
+  accentBg:'#172554', verseNum:'#3b82f6', headerBg:'#1e293b', cardBg:'#1e293b',
 };
 
 export default function App() {
-  const [user, setUser]               = useState(null);
-  const [userData, setUserData]       = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [dark, setDark]               = useState(() => localStorage.getItem('darkMode') === '1');
-  const [view, setView]               = useState(VIEW.HOME);
-  const [bookFilter, setBookFilter]   = useState('');
-  const [bookMeta, setBookMeta]       = useState(null);
+  const [user, setUser]                     = useState(null);
+  const [userData, setUserData]             = useState(null);
+  const [authLoading, setAuthLoading]       = useState(true);
+  const [redirectChecked, setRedirectChecked] = useState(false);
+  const [dark, setDark]                     = useState(() => {
+    try { return localStorage.getItem('darkMode') === '1'; } catch(e) { return false; }
+  });
+  const [view, setView]           = useState(VIEW.HOME);
+  const [bookFilter, setBookFilter] = useState('');
+  const [bookMeta, setBookMeta]   = useState(null);
   const [currentBook, setCurrentBook] = useState(null);
   const [currentChapter, setCurrentChapter] = useState(0);
   const [readerLoading, setReaderLoading]   = useState(false);
   const [selectedVerse, setSelectedVerse]   = useState(null);
-  const [toast, setToast]             = useState('');
+  const [toast, setToast]         = useState('');
   const toastTimer = useRef(null);
   const topRef     = useRef(null);
   const T = dark ? DARK : LIGHT;
 
+  // Passo 1: checar redirect ANTES do onAuthStateChanged
   useEffect(() => {
-    checkRedirectResult().catch(() => {});
+    checkRedirectResult()
+      .finally(() => setRedirectChecked(true));
+  }, []);
+
+  // Passo 2: só ouvir auth depois que o redirect foi verificado
+  useEffect(() => {
+    if (!redirectChecked) return;
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
@@ -129,7 +136,7 @@ export default function App() {
           const data = await loadUserData(firebaseUser.uid);
           setUserData(data);
         } catch(e) {
-          setUserData({ version: 'jfaal', progress: { bookId: 'gn', chapter: 0 }, bookmarks: [], history: [] });
+          setUserData({ version:'jfaal', progress:{ bookId:'gn', chapter:0 }, bookmarks:[], history:[] });
         }
       } else {
         setUser(null);
@@ -138,12 +145,12 @@ export default function App() {
       setAuthLoading(false);
     });
     return unsub;
-  }, []);
+  }, [redirectChecked]);
 
   function toggleDark() {
     const next = !dark;
     setDark(next);
-    localStorage.setItem('darkMode', next ? '1' : '0');
+    try { localStorage.setItem('darkMode', next ? '1' : '0'); } catch(e) {}
   }
 
   function showToast(msg) {
@@ -197,7 +204,7 @@ export default function App() {
     const bm = { bookId: currentBook.id, bookName: currentBook.name, chapter: currentChapter, verse: verseIdx, text: verse };
     await addBookmark(user.uid, bm);
     setUserData(prev => ({ ...prev, bookmarks: [...(prev.bookmarks || []), { ...bm, addedAt: new Date().toISOString() }] }));
-    showToast('✅ Versículo marcado!');
+    showToast('Versículo marcado!');
     setSelectedVerse(null);
   }
 
@@ -212,7 +219,7 @@ export default function App() {
     if (!user) return;
     await saveVersion(user.uid, v);
     setUserData(prev => ({ ...prev, version: v }));
-    showToast('Versão alterada para ' + v.toUpperCase());
+    showToast('Versão: ' + v.toUpperCase());
     if (view === VIEW.READER && currentBook) openBook(currentBook, currentChapter);
   }
 
@@ -228,7 +235,13 @@ export default function App() {
     catch(e) { showToast('Erro ao entrar com Google.'); }
   }
 
-  if (authLoading) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background: dark ? '#0f172a' : '#fff', fontSize:32 }}>📖</div>;
+  if (!redirectChecked || authLoading) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background: dark ? '#0f172a' : '#fff', fontSize:32 }}>
+        📖
+      </div>
+    );
+  }
 
   const version = userData?.version || 'jfaal';
 
@@ -240,14 +253,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
       <header style={{ position:'sticky', top:0, zIndex:100, background: T.headerBg, borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px', height:56, boxShadow:'0 1px 4px rgba(0,0,0,0.08)' }}>
         <button style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:8, padding:0 }} onClick={() => setView(VIEW.HOME)}>
           📖 <span style={{ fontSize:18, fontWeight:700, color: T.accent }}>Bíblia</span>
         </button>
         <nav style={{ display:'flex', gap:4, alignItems:'center' }}>
-          {/* Botão modo escuro */}
-          <button onClick={toggleDark} style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, padding:'4px 10px', borderRadius:8 }} title={dark ? 'Modo claro' : 'Modo escuro'}>
+          <button onClick={toggleDark} style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, padding:'4px 10px', borderRadius:8 }}>
             {dark ? '☀️' : '🌙'}
           </button>
           {user && (
@@ -260,10 +271,9 @@ export default function App() {
         </nav>
       </header>
 
-      {/* HOME */}
       {view === VIEW.HOME && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
-          {user && userData?.progress && userData.progress.bookId && (
+          {user && userData?.progress?.bookId && (
             <div onClick={resumeReading} style={{ display:'flex', alignItems:'center', gap:14, background: T.accentBg, border:`1px solid ${T.accentLight}`, borderRadius:12, padding:'14px 18px', marginBottom:20, cursor:'pointer' }}>
               <div style={{ fontSize:20, color: T.accent }}>▶</div>
               <div>
@@ -275,7 +285,7 @@ export default function App() {
             </div>
           )}
 
-          {!user && !authLoading && (
+          {!user && (
             <div style={{ background: T.bg3, borderRadius:12, padding:18, marginBottom:20, display:'flex', flexDirection:'column', gap:12 }}>
               <p style={{ margin:0, color: T.text2 }}>Entre com sua conta Google para salvar sua posição de leitura, marcadores e histórico.</p>
               <button onClick={handleLogin} style={{ display:'flex', alignItems:'center', gap:10, justifyContent:'center', background: T.bg2, border:`1px solid ${T.border}`, borderRadius:8, padding:'10px 20px', cursor:'pointer', fontFamily:'sans-serif', fontSize:14, fontWeight:600, color: T.text }}>
@@ -284,23 +294,18 @@ export default function App() {
             </div>
           )}
 
-          <input
-            style={{ width:'100%', boxSizing:'border-box', border:`1px solid ${T.border}`, borderRadius:10, padding:'10px 14px', fontSize:15, fontFamily:'sans-serif', marginBottom:24, background: T.bg2, color: T.text, outline:'none' }}
-            placeholder="Buscar livro..." value={bookFilter} onChange={e => setBookFilter(e.target.value)}
-          />
+          <input style={{ width:'100%', boxSizing:'border-box', border:`1px solid ${T.border}`, borderRadius:10, padding:'10px 14px', fontSize:15, fontFamily:'sans-serif', marginBottom:24, background: T.bg2, color: T.text, outline:'none' }}
+            placeholder="Buscar livro..." value={bookFilter} onChange={e => setBookFilter(e.target.value)} />
 
           <Section title="Antigo Testamento" books={AT_BOOKS} filter={bookFilter} onSelect={openBook} T={T} />
           <Section title="Novo Testamento"   books={NT_BOOKS} filter={bookFilter} onSelect={openBook} T={T} />
 
           <footer style={{ fontSize:11, color: T.text3, textAlign:'center', marginTop:40, fontFamily:'sans-serif', lineHeight:1.6 }}>
-            {version === 'jfaal'
-              ? 'As Escrituras em português são da JFAAL, Copyright © Marcos Cristiano Alves Ferreira. Setembro de 2024. Licença CC BY 3.0 BR.'
-              : 'Almeida Corrigida Fiel (ACF) — Domínio Público.'}
+            {version === 'jfaal' ? 'As Escrituras em português são da JFAAL, Copyright © Marcos Cristiano Alves Ferreira. Setembro de 2024. Licença CC BY 3.0 BR.' : 'Almeida Corrigida Fiel (ACF) — Domínio Público.'}
           </footer>
         </main>
       )}
 
-      {/* READER */}
       {view === VIEW.READER && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }} ref={topRef}>
           {readerLoading ? (
@@ -318,8 +323,7 @@ export default function App() {
 
               <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
                 {bookMeta.chapters[currentChapter].map((verse, i) => (
-                  <div key={i}
-                    style={{ display:'flex', gap:10, padding:'8px 6px', borderRadius:8, cursor:'pointer', background: selectedVerse === i ? (dark ? '#422006' : '#fef9c3') : 'transparent' }}
+                  <div key={i} style={{ display:'flex', gap:10, padding:'8px 6px', borderRadius:8, cursor:'pointer', background: selectedVerse === i ? (dark ? '#422006' : '#fef9c3') : 'transparent' }}
                     onClick={() => setSelectedVerse(selectedVerse === i ? null : i)}>
                     <span style={{ minWidth:24, color: T.verseNum, fontFamily:'sans-serif', fontSize:12, paddingTop:3, textAlign:'right' }}>{i + 1}</span>
                     <span style={{ lineHeight:1.8, fontSize:16, color: T.text }}>{verse}</span>
@@ -345,7 +349,6 @@ export default function App() {
         </main>
       )}
 
-      {/* MARCADORES */}
       {view === VIEW.BOOKMARKS && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           <h2 style={{ fontSize:20, fontWeight:700, marginBottom:20, color: T.text }}>🔖 Marcadores</h2>
@@ -372,7 +375,6 @@ export default function App() {
         </main>
       )}
 
-      {/* HISTÓRICO */}
       {view === VIEW.HISTORY && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           <h2 style={{ fontSize:20, fontWeight:700, marginBottom:20, color: T.text }}>🕐 Histórico de Leitura</h2>
@@ -395,7 +397,6 @@ export default function App() {
         </main>
       )}
 
-      {/* PERFIL */}
       {view === VIEW.PROFILE && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           {user ? (
@@ -411,17 +412,14 @@ export default function App() {
               <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:14, padding:20, marginBottom:20 }}>
                 <h3 style={{ fontSize:16, fontWeight:700, margin:'0 0 18px', color: T.text }}>⚙️ Configurações</h3>
 
-                {/* Modo escuro */}
                 <label style={{ fontSize:12, color: T.text2, textTransform:'uppercase', letterSpacing:1, fontFamily:'sans-serif', display:'block', marginBottom:10 }}>Aparência</label>
                 <div style={{ display:'flex', gap:10, marginBottom:20 }}>
-                  <button onClick={() => { setDark(false); localStorage.setItem('darkMode','0'); }}
-                    style={{ flex:1, padding:10, border:`1px solid ${T.border}`, borderRadius:10, background: !dark ? T.accentBg : T.bg3, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, color: !dark ? T.accent : T.text2, fontWeight: !dark ? 700 : 400 }}>
-                    ☀️ Claro
-                  </button>
-                  <button onClick={() => { setDark(true); localStorage.setItem('darkMode','1'); }}
-                    style={{ flex:1, padding:10, border:`1px solid ${T.border}`, borderRadius:10, background: dark ? T.accentBg : T.bg3, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, color: dark ? T.accent : T.text2, fontWeight: dark ? 700 : 400 }}>
-                    🌙 Escuro
-                  </button>
+                  {[['☀️ Claro', false], ['🌙 Escuro', true]].map(([label, val]) => (
+                    <button key={String(val)} onClick={() => { setDark(val); try { localStorage.setItem('darkMode', val ? '1' : '0'); } catch(e) {} }}
+                      style={{ flex:1, padding:10, border:`1px solid ${dark === val ? T.accentLight : T.border}`, borderRadius:10, background: dark === val ? T.accentBg : T.bg3, cursor:'pointer', fontFamily:'sans-serif', fontSize:14, color: dark === val ? T.accent : T.text2, fontWeight: dark === val ? 700 : 400 }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
                 <label style={{ fontSize:12, color: T.text2, textTransform:'uppercase', letterSpacing:1, fontFamily:'sans-serif', display:'block', marginBottom:10 }}>Versão da Bíblia</label>
