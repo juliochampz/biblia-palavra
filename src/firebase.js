@@ -52,6 +52,7 @@ export async function loadUserData(uid) {
     progress: { bookId: 'gn', chapter: 0 },
     bookmarks: [],
     history: [],
+    kidsScore: 0,
   };
   await setDoc(ref, defaults);
   return defaults;
@@ -84,4 +85,8 @@ export async function addHistory(uid, currentHistory, entry) {
 
 export function clearHistory(uid) {
   return updateDoc(userRef(uid), { history: [] });
+}
+
+export function saveKidsScore(uid, score) {
+  return updateDoc(userRef(uid), { kidsScore: score });
 }
