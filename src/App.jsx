@@ -4,11 +4,10 @@ import { onAuthStateChanged } from 'firebase/auth';
 import {
   auth, registrar, entrar, logout,
   loadUserData, saveVersion, saveProgress,
-  addBookmark, removeBookmark, addHistory, clearHistory,
+  addBookmark, removeBookmark, addHistory, clearHistory, saveKidsScore,
 } from './firebase';
 import Kids from './Kids';
 
-// Base path para JSONs
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const BOOKS = [
@@ -82,7 +81,7 @@ const BOOKS = [
 
 const AT_BOOKS = BOOKS.filter(b => b.testament === 'AT');
 const NT_BOOKS = BOOKS.filter(b => b.testament === 'NT');
-const VIEW = { HOME: 'home', READER: 'reader', BOOKMARKS: 'bookmarks', HISTORY: 'history', PROFILE: 'profile', AUTH: 'auth', KIDS: 'kids' };
+const VIEW = { HOME: 'home', READER: 'reader', BOOKMARKS: 'bookmarks', HISTORY: 'history', PROFILE: 'profile', AUTH: 'auth' };
 
 async function fetchBook(version, bookId) {
   const res = await fetch(`${BASE}/biblia/${version}/${bookId}.json`);
@@ -108,6 +107,7 @@ export default function App() {
   const [userData, setUserData]       = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [dark, setDark]               = useState(() => { try { return localStorage.getItem('darkMode') === '1'; } catch(e) { return false; } });
+  const [modo, setModo]               = useState(null);
   const [view, setView]               = useState(VIEW.HOME);
   const [authMode, setAuthMode]       = useState('login');
   const [email, setEmail]             = useState('');
@@ -134,7 +134,7 @@ export default function App() {
           const data = await loadUserData(firebaseUser.uid);
           setUserData(data);
         } catch(e) {
-          setUserData({ version:'jfaal', progress:{ bookId:'gn', chapter:0 }, bookmarks:[], history:[] });
+          setUserData({ version:'jfaal', progress:{ bookId:'gn', chapter:0 }, bookmarks:[], history:[], kidsScore:0 });
         }
       } else {
         setUser(null);
@@ -264,7 +264,42 @@ export default function App() {
     if (book) openBook(book, chapter);
   }
 
-  if (authLoading) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background: dark ? '#0f172a' : '#fff', fontSize:32 }}>📖</div>;
+  if (authLoading) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', fontSize:48 }}>📖</div>
+  );
+
+  if (!modo) return (
+    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ fontSize:64, marginBottom:8 }}>📖</div>
+      <h1 style={{ fontSize:28, fontWeight:900, color:'#fff', margin:'0 0 8px', textAlign:'center', textShadow:'0 2px 8px rgba(0,0,0,0.3)' }}>Bíblia Palavra Viva</h1>
+      <p style={{ color:'rgba(255,255,255,0.85)', fontFamily:'sans-serif', fontSize:16, margin:'0 0 40px', textAlign:'center' }}>Para quem é essa sessão?</p>
+      <div style={{ display:'flex', gap:16, width:'100%', maxWidth:340 }}>
+        <button onClick={() => setModo('kids')}
+          style={{ flex:1, padding:'28px 10px', background:'#fff', border:'4px solid #fbbf24', borderRadius:24, cursor:'pointer', textAlign:'center', boxShadow:'0 8px 32px rgba(0,0,0,0.2)' }}>
+          <div style={{ fontSize:48, marginBottom:8 }}>👶</div>
+          <div style={{ fontSize:20, fontWeight:900, color:'#7c3aed' }}>Kids</div>
+          <div style={{ fontSize:12, color:'#94a3b8', fontFamily:'sans-serif', marginTop:4 }}>Histórias e atividades</div>
+        </button>
+        <button onClick={() => setModo('adulto')}
+          style={{ flex:1, padding:'28px 10px', background:'#fff', border:'4px solid #60a5fa', borderRadius:24, cursor:'pointer', textAlign:'center', boxShadow:'0 8px 32px rgba(0,0,0,0.2)' }}>
+          <div style={{ fontSize:48, marginBottom:8 }}>📖</div>
+          <div style={{ fontSize:20, fontWeight:900, color:'#1e40af' }}>Adulto</div>
+          <div style={{ fontSize:12, color:'#94a3b8', fontFamily:'sans-serif', marginTop:4 }}>Leitura completa</div>
+        </button>
+      </div>
+    </div>
+  );
+
+  if (modo === 'kids') return (
+    <Kids
+      dark={dark}
+      onVoltar={() => setModo(null)}
+      user={user}
+      userData={userData}
+      setUserData={setUserData}
+      saveKidsScore={(score) => user ? saveKidsScore(user.uid, score) : Promise.resolve()}
+    />
+  );
 
   const version = userData?.version || 'jfaal';
 
@@ -284,7 +319,7 @@ export default function App() {
           <button onClick={toggleDark} style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, padding:'4px 10px', borderRadius:8 }}>
             {dark ? '☀️' : '🌙'}
           </button>
-          <NavBtn icon="📚" label="Kids" onClick={() => setView(VIEW.KIDS)} active={view === VIEW.KIDS} T={T} />
+          <button onClick={() => setModo(null)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, padding:'4px 10px', borderRadius:8 }} title="Trocar modo">🔄</button>
           {user && (
             <>
               <NavBtn icon="🔖" label="Marcadores" onClick={() => setView(VIEW.BOOKMARKS)} active={view === VIEW.BOOKMARKS} T={T} />
@@ -295,23 +330,13 @@ export default function App() {
         </nav>
       </header>
 
-      {/* KIDS */}
-      {view === VIEW.KIDS && (
-        <Kids dark={dark} onVoltar={() => setView(VIEW.HOME)} />
-      )}
-
-      {/* AUTH */}
       {view === VIEW.AUTH && (
         <main style={{ maxWidth:400, margin:'0 auto', padding:'40px 20px' }}>
           <div style={{ background: T.cardBg, border:`1px solid ${T.border}`, borderRadius:16, padding:28 }}>
             <div style={{ textAlign:'center', marginBottom:24 }}>
               <div style={{ fontSize:40, marginBottom:8 }}>📖</div>
-              <h2 style={{ fontSize:22, fontWeight:700, color: T.text, margin:0 }}>
-                {authMode === 'login' ? 'Entrar' : 'Criar conta'}
-              </h2>
-              <p style={{ color: T.text2, fontFamily:'sans-serif', fontSize:14, marginTop:6 }}>
-                {authMode === 'login' ? 'Acesse sua conta para continuar' : 'Crie sua conta gratuita'}
-              </p>
+              <h2 style={{ fontSize:22, fontWeight:700, color: T.text, margin:0 }}>{authMode === 'login' ? 'Entrar' : 'Criar conta'}</h2>
+              <p style={{ color: T.text2, fontFamily:'sans-serif', fontSize:14, marginTop:6 }}>{authMode === 'login' ? 'Acesse sua conta para continuar' : 'Crie sua conta gratuita'}</p>
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
               <input type="email" placeholder="Seu email" value={email} onChange={e => setEmail(e.target.value)}
@@ -332,7 +357,6 @@ export default function App() {
         </main>
       )}
 
-      {/* HOME */}
       {view === VIEW.HOME && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           {user && userData?.progress?.bookId && (
@@ -340,9 +364,7 @@ export default function App() {
               <div style={{ fontSize:20, color: T.accent }}>▶</div>
               <div>
                 <div style={{ fontSize:11, color: T.accent, fontFamily:'sans-serif', textTransform:'uppercase', letterSpacing:1 }}>Continuar lendo</div>
-                <div style={{ fontSize:16, fontWeight:600, color: T.accent }}>
-                  {BOOKS.find(b => b.id === userData.progress.bookId)?.name} — Cap. {userData.progress.chapter + 1}
-                </div>
+                <div style={{ fontSize:16, fontWeight:600, color: T.accent }}>{BOOKS.find(b => b.id === userData.progress.bookId)?.name} — Cap. {userData.progress.chapter + 1}</div>
               </div>
             </div>
           )}
@@ -364,7 +386,6 @@ export default function App() {
         </main>
       )}
 
-      {/* READER */}
       {view === VIEW.READER && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }} ref={topRef}>
           {readerLoading ? (
@@ -405,7 +426,6 @@ export default function App() {
         </main>
       )}
 
-      {/* MARCADORES */}
       {view === VIEW.BOOKMARKS && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           <h2 style={{ fontSize:20, fontWeight:700, marginBottom:20, color: T.text }}>🔖 Marcadores</h2>
@@ -428,30 +448,20 @@ export default function App() {
         </main>
       )}
 
-      {/* HISTÓRICO */}
       {view === VIEW.HISTORY && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
             <h2 style={{ fontSize:20, fontWeight:700, color: T.text, margin:0 }}>🕐 Histórico</h2>
             {user && (userData?.history || []).length > 0 && (
-              <button onClick={() => setConfirmLimpar(true)}
-                style={{ background:'none', border:`1px solid #fca5a5`, color:'#dc2626', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:13, fontFamily:'sans-serif' }}>
-                Limpar tudo
-              </button>
+              <button onClick={() => setConfirmLimpar(true)} style={{ background:'none', border:`1px solid #fca5a5`, color:'#dc2626', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:13, fontFamily:'sans-serif' }}>Limpar tudo</button>
             )}
           </div>
           {confirmLimpar && (
             <div style={{ background: T.cardBg, border:`1px solid #fca5a5`, borderRadius:12, padding:16, marginBottom:16 }}>
               <p style={{ color: T.text, fontFamily:'sans-serif', fontSize:14, margin:'0 0 12px' }}>Tem certeza que deseja limpar todo o histórico?</p>
               <div style={{ display:'flex', gap:10 }}>
-                <button onClick={limparHistorico}
-                  style={{ flex:1, padding:'9px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, cursor:'pointer', fontFamily:'sans-serif', fontSize:14 }}>
-                  Sim, limpar
-                </button>
-                <button onClick={() => setConfirmLimpar(false)}
-                  style={{ flex:1, padding:'9px', background: T.bg3, color: T.text2, border:`1px solid ${T.border}`, borderRadius:8, cursor:'pointer', fontFamily:'sans-serif', fontSize:14 }}>
-                  Cancelar
-                </button>
+                <button onClick={limparHistorico} style={{ flex:1, padding:'9px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, cursor:'pointer', fontFamily:'sans-serif', fontSize:14 }}>Sim, limpar</button>
+                <button onClick={() => setConfirmLimpar(false)} style={{ flex:1, padding:'9px', background: T.bg3, color: T.text2, border:`1px solid ${T.border}`, borderRadius:8, cursor:'pointer', fontFamily:'sans-serif', fontSize:14 }}>Cancelar</button>
               </div>
             </div>
           )}
@@ -470,7 +480,6 @@ export default function App() {
         </main>
       )}
 
-      {/* PERFIL */}
       {view === VIEW.PROFILE && (
         <main style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px', paddingBottom:80 }}>
           {user ? (
@@ -507,9 +516,13 @@ export default function App() {
                     <span style={{ fontSize:24, fontWeight:700, color: T.accent }}>{(userData?.history||[]).length}</span>
                     <span style={{ fontSize:11, color: T.text3, fontFamily:'sans-serif' }}>Capítulos lidos</span>
                   </div>
+                  <div style={{ flex:1, background: T.bg3, borderRadius:10, padding:'14px 10px', display:'flex', flexDirection:'column', alignItems:'center' }}>
+                    <span style={{ fontSize:24, fontWeight:700, color:'#7c3aed' }}>{userData?.kidsScore || 0}</span>
+                    <span style={{ fontSize:11, color: T.text3, fontFamily:'sans-serif' }}>Pts Kids</span>
+                  </div>
                 </div>
               </div>
-              <button onClick={() => { logout(); setView(VIEW.HOME); }}
+              <button onClick={() => { logout(); setView(VIEW.HOME); setModo(null); }}
                 style={{ width:'100%', padding:12, border:'1px solid #fca5a5', background: T.bg2, color:'#dc2626', borderRadius:10, cursor:'pointer', fontFamily:'sans-serif', fontSize:15 }}>
                 Sair da conta
               </button>
